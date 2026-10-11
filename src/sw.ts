@@ -7,7 +7,7 @@ declare let self: ServiceWorkerGlobalScope
 // Offline shell: cache the built app so it opens instantly from the home screen.
 precacheAndRoute(self.__WB_MANIFEST)
 cleanupOutdatedCaches()
-registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html')))
+registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html'), { denylist: [/^\/api\//, /^\/\.netlify\//] }))
 
 self.addEventListener('install', () => void self.skipWaiting())
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()))

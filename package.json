@@ -1,7 +1,7 @@
 {
-  "name": "scratch-save",
+  "name": "stax",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,15 +10,19 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.117.3",
+    "@netlify/blobs": "^11.1.4",
+    "@netlify/identity": "^2.0.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "vite-plugin-pwa": "^2.0.0"
+    "vite-plugin-pwa": "^2.0.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@netlify/functions": "^6.0.2",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
+    "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^6.1.1",
     "oxlint": "^1.81.0",
     "typescript": "~6.0.2",

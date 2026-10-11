@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { crossedMilestone, money } from '../lib/chart'
 import { chime } from '../lib/feedback'
 import { isPayday, todayIn } from '../lib/payday'
-import { errorText, supabase } from '../lib/supabase'
+import { api, errorText } from '../lib/api'
 import type { RemoteScratch } from '../lib/useCouple'
 import type { Chart, Member, PaySchedule, Square } from '../lib/types'
 import { Confetti } from '../components/Confetti'
@@ -41,13 +41,14 @@ type Props = {
   remote: RemoteScratch | null
   setViewing: (id: number | null) => void
   patchSquare: (id: number, patch: Partial<Square>) => void
+  mutate: <T>(fn: () => Promise<T>) => Promise<T>
   onSettings: () => void
   onInvite: () => void
   onNewChart: () => void
 }
 
 export function Board(props: Props) {
-  const { me, members, chart, squares, schedule, partnerViewing, remote, setViewing, patchSquare } = props
+  const { me, members, chart, squares, schedule, partnerViewing, remote, setViewing, patchSquare, mutate } = props
   const [filter, setFilter] = useState<Filter>('all')
   const [phase, setPhase] = useState<'grid' | 'lift' | 'card'>('grid')
   const [sel, setSel] = useState<Square | null>(null)
@@ -144,10 +145,11 @@ export function Board(props: Props) {
       milestone === 100 ? 'Chart complete! You did it.' : milestone ? `${milestone}% milestone reached!` : `Square scratched · ${money(sq.amount)}`
     showToast({ msg, undoId: sq.id })
 
-    const { error } = await supabase.rpc('scratch_square', { p_square: sq.id })
-    if (error) {
+    try {
+      await mutate(() => api('POST', '/scratch', { id: sq.id }))
+    } catch (err) {
       patchSquare(sq.id, { scratched_at: null, scratched_by: null })
-      showToast({ msg: errorText(error) })
+      showToast({ msg: errorText(err) })
     }
   }
 
@@ -156,10 +158,11 @@ export function Board(props: Props) {
     showToast(null)
     setBurst(0)
     patchSquare(id, { scratched_at: null, scratched_by: null })
-    const { error } = await supabase.rpc('undo_scratch', { p_square: id })
-    if (error) {
+    try {
+      await mutate(() => api('POST', '/undo', { id }))
+    } catch (err) {
       if (sq) patchSquare(id, { scratched_at: sq.scratched_at, scratched_by: sq.scratched_by })
-      showToast({ msg: errorText(error) })
+      showToast({ msg: errorText(err) })
     }
   }
 
@@ -194,7 +197,7 @@ export function Board(props: Props) {
           <span className="eyebrow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {chart.name}
           </span>
-          <h1>Scratch &amp; Save</h1>
+          <h1>Stax</h1>
         </div>
         <div className="head-right">
           <div className="avatars">

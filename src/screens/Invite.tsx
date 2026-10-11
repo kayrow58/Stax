@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { errorText, supabase } from '../lib/supabase'
-import type { Couple, Member } from '../lib/types'
+import { api, errorText } from '../lib/api'
+import type { AppState, Couple, Member } from '../lib/types'
 import { BackIcon, CopyIcon, ShareIcon } from '../components/Icons'
 
 type Props = {
@@ -10,7 +10,7 @@ type Props = {
   onboarding: boolean
   onNext: () => void
   onBack: () => void
-  onJoined: () => void
+  onJoined: (state: AppState) => void
 }
 
 export const prettyCode = (c: string) => (c.length === 6 ? `${c.slice(0, 3)}-${c.slice(3)}` : c)
@@ -34,10 +34,10 @@ export function Invite({ couple, members, me, onboarding, onNext, onBack, onJoin
   }
 
   async function share() {
-    const text = `Join our savings chart on Scratch & Save! Code: ${prettyCode(couple.invite_code)}`
+    const text = `Join our savings chart on Stax! Code: ${prettyCode(couple.invite_code)}`
     if (navigator.share) {
       try {
-        await navigator.share({ title: 'Scratch & Save', text, url: link })
+        await navigator.share({ title: 'Stax', text, url: link })
       } catch {
         /* cancelled */
       }
@@ -57,10 +57,13 @@ export function Invite({ couple, members, me, onboarding, onNext, onBack, onJoin
     if (!code.trim()) return
     setBusy(true)
     setError(null)
-    const { error } = await supabase.rpc('join_couple', { p_code: code.trim(), p_name: me.display_name })
-    setBusy(false)
-    if (error) return setError(errorText(error))
-    onJoined()
+    try {
+      onJoined(await api<AppState>('POST', '/couple/join', { code: code.trim(), name: me.display_name }))
+    } catch (err) {
+      setError(errorText(err))
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (

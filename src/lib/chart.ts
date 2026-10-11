@@ -1,4 +1,4 @@
-/** Mirrors create_chart() in supabase/schema.sql so the preview matches what gets saved. */
+/** Same sizing rules the server uses (netlify/lib/app.ts), so the preview matches what gets saved. */
 export function planChart(goal: number) {
   const g = Math.max(55, Math.floor(goal) || 0)
   const n = g >= 5050 ? 100 : Math.max(10, Math.floor((Math.sqrt(8 * g + 1) - 1) / 2))

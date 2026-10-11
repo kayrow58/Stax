@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import type { Session } from '@supabase/supabase-js'
-import { configured, errorText, supabase } from './lib/supabase'
+import { getUser, handleAuthCallback, logout, onAuthChange, type User } from '@netlify/identity'
+import { api, errorText } from './lib/api'
 import { useCouple } from './lib/useCouple'
-import type { PayKind } from './lib/types'
-import { SignIn } from './screens/SignIn'
+import type { AppState, PayKind } from './lib/types'
+import { NewPassword, SignIn } from './screens/SignIn'
 import { Welcome } from './screens/Welcome'
 import { Setup } from './screens/Setup'
 import { Invite } from './screens/Invite'
@@ -16,38 +16,56 @@ const INVITE_KEY = 'ss.invite'
 function captureInvite() {
   const m = window.location.pathname.match(/^\/join\/([A-Za-z0-9-]{4,12})\/?$/)
   if (m) {
-    localStorage.setItem(INVITE_KEY, m[1].toUpperCase())
+    localStorage.setItem(INVITE_KEY, m[1].toUpperCase().replace(/-/g, ''))
     window.history.replaceState(null, '', '/' + window.location.hash)
   }
 }
 captureInvite()
+/** Signed in only counts once the session cookie the API reads is in place. */
+const hasSession = () => /(?:^|;\s*)nf_jwt=/.test(document.cookie)
 const pendingInvite = () => localStorage.getItem(INVITE_KEY)
 const clearInvite = () => localStorage.removeItem(INVITE_KEY)
 
 export default function App() {
-  if (!configured) return <NotConfigured />
-  return <Root />
-}
-
-function Root() {
-  const [session, setSession] = useState<Session | null | undefined>(undefined)
+  const [user, setUser] = useState<User | null | undefined>(undefined)
+  const [recovering, setRecovering] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
 
   useEffect(() => {
-    void supabase.auth.getSession().then(({ data }) => setSession(data.session))
-    const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
-    return () => data.subscription.unsubscribe()
+    let alive = true
+    void (async () => {
+      // Handles links from emails: confirming an account, or resetting a password.
+      try {
+        const cb = await handleAuthCallback()
+        if (cb?.type === 'recovery') setRecovering(true)
+        if (cb?.type === 'confirmation') setNotice('Your email is confirmed. Welcome to Stax!')
+      } catch (e) {
+        setNotice(`That link didn’t work (${errorText(e)}). It may have expired; try again.`)
+      }
+      const u = await getUser()
+      if (alive) setUser(u && hasSession() ? u : null)
+    })()
+    const off = onAuthChange((event, u) => {
+      if (event === 'recovery') setRecovering(true)
+      setUser(u && hasSession() ? u : null)
+    })
+    return () => {
+      alive = false
+      off()
+    }
   }, [])
 
-  if (session === undefined) return <Loading />
-  if (!session) return <SignIn joining={Boolean(pendingInvite())} />
-  return <Home key={session.user.id} userId={session.user.id} />
+  if (user === undefined) return <Loading />
+  if (recovering && user) return <NewPassword onDone={() => setRecovering(false)} />
+  if (!user) return <SignIn joining={Boolean(pendingInvite())} notice={notice} />
+  return <Home key={user.id} />
 }
 
 type View = 'board' | 'invite' | 'settings' | 'newchart'
 type Onboarding = null | 'invite' | 'reminders'
 
-function Home({ userId }: { userId: string }) {
-  const c = useCouple(userId)
+function Home() {
+  const c = useCouple()
   const [view, setView] = useState<View>('board')
   const [onboarding, setOnboarding] = useState<Onboarding>(null)
   const [chosenFreq, setChosenFreq] = useState<PayKind | null>(null)
@@ -69,13 +87,16 @@ function Home({ userId }: { userId: string }) {
       )
       return
     }
-    void supabase.rpc('join_couple', { p_code: code, p_name: c.member.display_name }).then(({ error }) => {
-      if (error) setNotice(errorText(error))
-      else void c.reload()
-    })
+    void api<AppState>('POST', '/couple/join', { code, name: c.member.display_name })
+      .then(c.apply)
+      .catch((e) => setNotice(errorText(e)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [c.member?.user_id, c.couple?.id])
 
+  if (c.signedOut) {
+    void logout().catch(() => undefined)
+    return <Loading />
+  }
   if (c.loading) return <Loading />
   if (c.error && !c.member) return <ErrorScreen message={c.error} onRetry={() => void c.reload()} />
 
@@ -84,10 +105,10 @@ function Home({ userId }: { userId: string }) {
     screen = (
       <Welcome
         inviteCode={pendingInvite()}
-        onDone={(joined) => {
+        onDone={(joined, state) => {
           clearInvite()
           setOnboarding(joined ? 'reminders' : null)
-          void c.reload()
+          c.apply(state)
         }}
       />
     )
@@ -97,11 +118,11 @@ function Home({ userId }: { userId: string }) {
         replacing={Boolean(c.chart)}
         defaultFreq={c.schedule?.kind ?? null}
         onCancel={c.chart ? () => setView('board') : undefined}
-        onCreated={(freq) => {
+        onCreated={(freq, state) => {
           setChosenFreq(freq)
           setView('board')
           if (!c.chart) setOnboarding(c.members.length > 1 ? 'reminders' : 'invite')
-          void c.reload()
+          c.apply(state)
         }}
       />
     )
@@ -114,10 +135,10 @@ function Home({ userId }: { userId: string }) {
         onboarding={onboarding === 'invite'}
         onNext={() => setOnboarding('reminders')}
         onBack={() => setView('board')}
-        onJoined={() => {
+        onJoined={(state) => {
           setView('board')
           setOnboarding(null)
-          void c.reload()
+          c.apply(state)
         }}
       />
     )
@@ -153,6 +174,7 @@ function Home({ userId }: { userId: string }) {
         remote={c.remote}
         setViewing={c.setViewing}
         patchSquare={c.patchSquare}
+        mutate={c.mutate}
         onSettings={() => setView('settings')}
         onInvite={() => setView('invite')}
         onNewChart={() => setView('newchart')}
@@ -192,22 +214,10 @@ function ErrorScreen({ message, onRetry }: { message: string; onRetry: () => voi
         <button type="button" className="btn" onClick={onRetry}>
           Try again
         </button>
-        <button type="button" className="link-btn" onClick={() => void supabase.auth.signOut()}>
-          Sign out
+        <button type="button" className="link-btn" onClick={() => void logout()}>
+          Log out
         </button>
       </div>
-    </main>
-  )
-}
-
-function NotConfigured() {
-  return (
-    <main className="screen">
-      <h1 className="title">Almost there</h1>
-      <p className="lede">
-        This copy of Scratch &amp; Save isn&rsquo;t connected to a database yet. Add <code>VITE_SUPABASE_URL</code> and{' '}
-        <code>VITE_SUPABASE_KEY</code> to your environment variables (see the setup guide, step 4), then redeploy.
-      </p>
     </main>
   )
 }

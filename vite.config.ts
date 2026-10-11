@@ -13,8 +13,8 @@ export default defineConfig({
       injectRegister: false,
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Scratch & Save',
-        short_name: 'Scratch & Save',
+        name: 'Stax',
+        short_name: 'Stax',
         description: 'Save money together, one scratch-off square at a time.',
         theme_color: '#17241C',
         background_color: '#F2F4EF',

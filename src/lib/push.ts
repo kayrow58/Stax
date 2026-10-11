@@ -1,6 +1,4 @@
-import { supabase } from './supabase'
-
-export const VAPID_PUBLIC_KEY = (import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined) || ''
+import { api } from './api'
 
 export const pushSupported = () =>
   'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
@@ -29,26 +27,19 @@ export async function pushIsOn(): Promise<boolean> {
   }
 }
 
-export type PushResult = 'ok' | 'denied' | 'unsupported' | 'needs-install' | 'not-configured' | 'error'
+export type PushResult = 'ok' | 'denied' | 'unsupported' | 'needs-install' | 'error'
 
 export async function turnOnPush(): Promise<PushResult> {
-  if (!VAPID_PUBLIC_KEY) return 'not-configured'
   if (!pushSupported()) return isIOS() && !isInstalled() ? 'needs-install' : 'unsupported'
   const permission = await Notification.requestPermission()
   if (permission !== 'granted') return 'denied'
   try {
+    const { publicKey } = await api<{ publicKey: string }>('GET', '/push/key')
     const reg = await navigator.serviceWorker.ready
     let sub = await reg.pushManager.getSubscription()
-    if (!sub) {
-      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyToBytes(VAPID_PUBLIC_KEY) })
-    }
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyToBytes(publicKey) })
     const json = sub.toJSON()
-    const { error } = await supabase.rpc('save_push_subscription', {
-      p_endpoint: json.endpoint,
-      p_p256dh: json.keys?.p256dh,
-      p_auth: json.keys?.auth,
-    })
-    if (error) throw error
+    await api('POST', '/push', { endpoint: json.endpoint, keys: json.keys })
     return 'ok'
   } catch (e) {
     console.error(e)
@@ -61,10 +52,15 @@ export async function turnOffPush() {
     const reg = await navigator.serviceWorker.getRegistration()
     const sub = await reg?.pushManager.getSubscription()
     if (sub) {
-      await supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint)
+      await api('DELETE', '/push', { endpoint: sub.endpoint }).catch(() => undefined)
       await sub.unsubscribe()
     }
   } catch (e) {
     console.error(e)
   }
+}
+
+export async function sendTestPush(): Promise<number> {
+  const r = await api<{ sent: number }>('POST', '/push/test', {})
+  return r.sent
 }

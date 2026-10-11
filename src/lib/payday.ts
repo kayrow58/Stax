@@ -1,7 +1,7 @@
 import type { PayKind } from './types'
 
-// Dates are 'YYYY-MM-DD' strings. Keep this file in sync with
-// supabase/functions/payday-reminders/index.ts (same rules).
+// Dates are 'YYYY-MM-DD' strings. Used by both the app and the reminder
+// function (netlify/lib/app.ts), so the rules always match.
 
 const toDate = (s: string) => new Date(s + 'T00:00:00Z')
 const iso = (d: Date) => d.toISOString().slice(0, 10)
@@ -59,7 +59,25 @@ export function todayIn(timeZone: string): string {
   }
 }
 
-export const localTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Chicago'
+/** The date and hour (0–23) right now in a time zone. */
+export function localDateHour(timeZone: string, now = new Date()): { date: string; hour: number } {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(now)
+    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '00'
+    return { date: `${get('year')}-${get('month')}-${get('day')}`, hour: Number(get('hour')) }
+  } catch {
+    return { date: iso(now), hour: now.getUTCHours() }
+  }
+}
+
+export const localTimeZone =() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Chicago'
 
 export const prettyDate = (s: string) =>
   toDate(s).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })

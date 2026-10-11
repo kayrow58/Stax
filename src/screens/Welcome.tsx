@@ -1,9 +1,12 @@
 import { useState } from 'react'
-import { errorText, supabase } from '../lib/supabase'
+import { api, errorText } from '../lib/api'
+import type { AppState } from '../lib/types'
 import { Logo } from '../components/Icons'
 
+type Props = { inviteCode: string | null; onDone: (joined: boolean, state: AppState) => void }
+
 /** First time after sign-in: pick a name, then start a chart or join a partner's. */
-export function Welcome({ inviteCode, onDone }: { inviteCode: string | null; onDone: (joined: boolean) => void }) {
+export function Welcome({ inviteCode, onDone }: Props) {
   const [name, setName] = useState('')
   const [code, setCode] = useState(inviteCode ?? '')
   const [haveCode, setHaveCode] = useState(Boolean(inviteCode))
@@ -16,12 +19,17 @@ export function Welcome({ inviteCode, onDone }: { inviteCode: string | null; onD
     if (!n) return
     setBusy(true)
     setError(null)
-    const { error } = haveCode && code.trim()
-      ? await supabase.rpc('join_couple', { p_code: code.trim(), p_name: n })
-      : await supabase.rpc('create_couple', { p_name: n })
-    setBusy(false)
-    if (error) return setError(errorText(error))
-    onDone(haveCode && Boolean(code.trim()))
+    const joining = haveCode && Boolean(code.trim())
+    try {
+      const state = joining
+        ? await api<AppState>('POST', '/couple/join', { code: code.trim(), name: n })
+        : await api<AppState>('POST', '/couple/create', { name: n })
+      onDone(joining, state)
+    } catch (err) {
+      setError(errorText(err))
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
+import { logout } from '@netlify/identity'
 import { hourLabel, localTimeZone, nextPayday, prettyDate, todayIn } from '../lib/payday'
-import { isInstalled, isIOS, pushIsOn, turnOffPush, turnOnPush, type PushResult } from '../lib/push'
+import { isInstalled, isIOS, pushIsOn, sendTestPush, turnOffPush, turnOnPush, type PushResult } from '../lib/push'
 import { setSoundOn, soundOn } from '../lib/feedback'
-import { errorText, supabase } from '../lib/supabase'
+import { api, errorText } from '../lib/api'
 import type { Member, PayKind, PaySchedule } from '../lib/types'
 import { BackIcon } from '../components/Icons'
 
@@ -17,10 +18,9 @@ const HOURS = Array.from({ length: 16 }, (_, i) => i + 6)
 export const denseGrid = () => localStorage.getItem('ss.dense') === '1'
 
 const PUSH_MESSAGES: Record<Exclude<PushResult, 'ok'>, string> = {
-  denied: 'Notifications are blocked. Turn them on for this app in your phone’s settings, then try again.',
-  unsupported: 'This browser can’t show notifications. Email reminders will still work.',
-  'needs-install': 'On iPhone, add this app to your Home Screen first: tap Share, then “Add to Home Screen”. Open it from there and turn this on.',
-  'not-configured': 'Notifications aren’t set up for this app yet (see the setup guide, step 6).',
+  denied: 'Notifications are blocked. Turn them on for Stax in your phone’s settings, then try again.',
+  unsupported: 'This browser can’t show notifications. Try Chrome on Android, or Safari on iPhone after adding Stax to your Home Screen.',
+  'needs-install': 'On iPhone, add Stax to your Home Screen first: tap Share, then “Add to Home Screen”. Open it from there and turn this on.',
   error: 'Couldn’t turn on notifications. Please try again.',
 }
 
@@ -42,7 +42,6 @@ export function Settings({ me, schedule, defaultKind, onboarding, onSaved, onBac
   const [kind, setKind] = useState<PayKind>(schedule?.kind ?? defaultKind ?? 'biweekly')
   const [anchor, setAnchor] = useState(schedule?.anchor_date ?? today)
   const [hour, setHour] = useState(schedule?.remind_hour ?? 9)
-  const [email, setEmail] = useState(schedule?.email_backup ?? isIOS())
   const [push, setPush] = useState(false)
   const [pushMsg, setPushMsg] = useState<string | null>(null)
   const [name, setName] = useState(me.display_name)
@@ -67,33 +66,45 @@ export function Settings({ me, schedule, defaultKind, onboarding, onSaved, onBac
       return
     }
     const r = await turnOnPush()
-    if (r === 'ok') setPush(true)
-    else setPushMsg(PUSH_MESSAGES[r])
+    if (r === 'ok') {
+      setPush(true)
+      setPushMsg('Notifications are on for this phone.')
+    } else setPushMsg(PUSH_MESSAGES[r])
+  }
+
+  async function testPush() {
+    setPushMsg(null)
+    try {
+      const sent = await sendTestPush()
+      setPushMsg(sent ? 'Sent! It should appear in a few seconds.' : 'No phones are set up for notifications yet.')
+    } catch (e) {
+      setPushMsg(errorText(e))
+    }
   }
 
   async function save() {
     setBusy(true)
     setError(null)
-    const row = {
-      user_id: me.user_id,
-      kind,
-      anchor_date: needsAnchor ? anchor : null,
-      remind_hour: hour,
-      timezone: localTimeZone(),
-      email_backup: email,
-      updated_at: new Date().toISOString(),
-    }
-    const { data, error } = await supabase.from('pay_schedules').upsert(row).select().single<PaySchedule>()
-    if (!error && name.trim() && name.trim() !== me.display_name) {
-      const r = await supabase.from('members').update({ display_name: name.trim() }).eq('user_id', me.user_id)
-      if (!r.error) onRenamed()
-    }
-    setBusy(false)
-    if (error) return setError(errorText(error))
-    onSaved(data)
-    if (!onboarding) {
-      setSaved(true)
-      window.setTimeout(() => setSaved(false), 1800)
+    try {
+      const s = await api<PaySchedule>('PUT', '/schedule', {
+        kind,
+        anchor_date: needsAnchor ? anchor : null,
+        remind_hour: hour,
+        timezone: localTimeZone(),
+      })
+      if (name.trim() && name.trim() !== me.display_name) {
+        await api('POST', '/profile', { name: name.trim() })
+        onRenamed()
+      }
+      onSaved(s)
+      if (!onboarding) {
+        setSaved(true)
+        window.setTimeout(() => setSaved(false), 1800)
+      }
+    } catch (e) {
+      setError(errorText(e))
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -153,19 +164,16 @@ export function Settings({ me, schedule, defaultKind, onboarding, onSaved, onBac
       <button type="button" role="switch" aria-checked={push} className="switch-row" onClick={() => void togglePush()}>
         <span className="grow">
           <strong>Payday notifications on this phone</strong>
-          <span className="small">{isIOS() && !isInstalled() ? 'iPhone: add to Home Screen first' : 'Turn on for each phone you use'}</span>
+          <span className="small">{isIOS() && !isInstalled() ? 'iPhone: add Stax to your Home Screen first' : 'Turn on for each phone you use'}</span>
         </span>
         <span className="track" aria-hidden="true" />
       </button>
-      {pushMsg && <div className="notice">{pushMsg}</div>}
-
-      <button type="button" role="switch" aria-checked={email} className="switch-row" onClick={() => setEmail(!email)}>
-        <span className="grow">
-          <strong>Also email me</strong>
-          <span className="small">A backup in case phone alerts get missed</span>
-        </span>
-        <span className="track" aria-hidden="true" />
-      </button>
+      {push && (
+        <button type="button" className="link-btn" onClick={() => void testPush()}>
+          Send a test notification
+        </button>
+      )}
+      {pushMsg && <div className="notice" role="status">{pushMsg}</div>}
 
       {!onboarding && (
         <>
@@ -230,8 +238,14 @@ export function Settings({ me, schedule, defaultKind, onboarding, onSaved, onBac
             <button type="button" className="link-btn" onClick={onNewChart}>
               Start a new chart
             </button>
-            <button type="button" className="link-btn danger" onClick={() => void supabase.auth.signOut()}>
-              Sign out
+            <button
+              type="button"
+              className="link-btn danger"
+              onClick={() => {
+                void turnOffPush().finally(() => void logout())
+              }}
+            >
+              Log out
             </button>
           </>
         )}

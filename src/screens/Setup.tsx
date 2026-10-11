@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { money, PAYDAYS_PER_YEAR, planChart } from '../lib/chart'
-import { errorText, supabase } from '../lib/supabase'
-import type { PayKind } from '../lib/types'
+import { api, errorText } from '../lib/api'
+import type { AppState, PayKind } from '../lib/types'
 
 const MONTHS = [6, 12, 18, 24]
 const FREQS: [PayKind, string][] = [
@@ -15,7 +15,7 @@ type Props = {
   /** True when this replaces an existing chart. */
   replacing: boolean
   defaultFreq: PayKind | null
-  onCreated: (freq: PayKind) => void
+  onCreated: (freq: PayKind, state: AppState) => void
   onCancel?: () => void
 }
 
@@ -39,10 +39,14 @@ export function Setup({ replacing, defaultFreq, onCreated, onCancel }: Props) {
     if (!valid) return
     setBusy(true)
     setError(null)
-    const { error } = await supabase.rpc('create_chart', { p_name: name.trim(), p_goal: goal, p_months: months })
-    setBusy(false)
-    if (error) return setError(errorText(error))
-    onCreated(freq)
+    try {
+      const state = await api<AppState>('POST', '/chart', { name: name.trim(), goal, months })
+      onCreated(freq, state)
+    } catch (err) {
+      setError(errorText(err))
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
