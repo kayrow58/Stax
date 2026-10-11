@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Scratch &amp; Save — key generator</title>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: #F2F4EF; color: #17241C; }
+  main { max-width: 640px; margin: 0 auto; padding: 32px 20px 64px; display: flex; flex-direction: column; gap: 18px; }
+  h1 { margin: 0; font-size: 28px; }
+  p { margin: 0; line-height: 1.5; color: #33433A; }
+  .row { display: flex; flex-direction: column; gap: 6px; }
+  label { font-weight: 700; font-size: 14px; }
+  .box { display: flex; gap: 8px; }
+  input { flex: 1; min-width: 0; height: 44px; padding: 0 12px; border: 1.5px solid #C9D1C6; border-radius: 10px; font: 14px ui-monospace, monospace; background: #fff; }
+  button { min-height: 44px; padding: 0 16px; border: 0; border-radius: 10px; background: #17241C; color: #F2F4EF; font-weight: 700; cursor: pointer; }
+  .warn { background: #FBF3E4; color: #5A3A0A; padding: 12px 14px; border-radius: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Notification keys</h1>
+  <p>These keys are made right here in your browser and are never sent anywhere. Copy each one into the place shown in the setup guide (step 6). Reloading the page makes new ones, so copy them all before you leave.</p>
+  <div class="warn">Keep the <strong>private key</strong> and <strong>cron secret</strong> to yourself. Only paste them into Supabase secrets.</div>
+  <div class="row"><label for="pub">VAPID_PUBLIC_KEY (goes in Vercel AND Supabase)</label><div class="box"><input id="pub" readonly><button data-copy="pub">Copy</button></div></div>
+  <div class="row"><label for="priv">VAPID_PRIVATE_KEY (Supabase only)</label><div class="box"><input id="priv" readonly><button data-copy="priv">Copy</button></div></div>
+  <div class="row"><label for="cron">CRON_SECRET (Supabase secret + the hourly job)</label><div class="box"><input id="cron" readonly><button data-copy="cron">Copy</button></div></div>
+</main>
+<script>
+  const b64url = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  (async () => {
+    const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+    document.getElementById('pub').value = b64url(await crypto.subtle.exportKey('raw', pair.publicKey));
+    document.getElementById('priv').value = (await crypto.subtle.exportKey('jwk', pair.privateKey)).d;
+    document.getElementById('cron').value = b64url(crypto.getRandomValues(new Uint8Array(24)));
+  })();
+  document.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', async () => {
+    const el = document.getElementById(b.dataset.copy);
+    el.select();
+    try { await navigator.clipboard.writeText(el.value); } catch { document.execCommand('copy'); }
+    b.textContent = 'Copied'; setTimeout(() => (b.textContent = 'Copy'), 1500);
+  }));
+</script>
+</body>
+</html>
