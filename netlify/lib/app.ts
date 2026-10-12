@@ -1,6 +1,7 @@
 import webpush from 'web-push'
 import type { KV } from './kv'
 import type { AuthUser } from './auth'
+import { CLIENT_EVENTS, cleanDetail, isAdmin, overview, track } from './analytics'
 import { planChart } from '../../src/lib/chart'
 import { isPayday, localDateHour } from '../../src/lib/payday'
 import type { AppState, Chart, Couple, Member, PayKind, PaySchedule, Square } from '../../src/lib/types'
@@ -98,7 +99,7 @@ async function requireCouple(kv: KV, userId: string) {
 async function getState(kv: KV, user: AuthUser): Promise<AppState> {
   const [couple, sched] = await Promise.all([myCouple(kv, user.id), kv.get<PaySchedule>(K.schedule(user.id))])
   const base: AppState = {
-    me: { user_id: user.id, email: user.email },
+    me: { user_id: user.id, email: user.email, is_admin: isAdmin(user) },
     member: null,
     couple: null,
     members: [],
@@ -251,8 +252,10 @@ async function scratch(kv: KV, user: AuthUser, body: { id?: unknown }) {
 async function undo(kv: KV, user: AuthUser, body: { id?: unknown }) {
   const couple = await requireCouple(kv, user.id)
   const id = Number(body.id)
+  let amount = 0
   await update<CoupleDoc>(kv, K.couple(couple.id), (doc) => {
     const sq = doc.chart?.squares.find((s) => s.id === id)
+    amount = sq?.amount ?? 0
     const ok =
       sq && sq.scratched_by === user.id && sq.scratched_at && Date.now() - Date.parse(sq.scratched_at) < UNDO_WINDOW_MS
     if (!ok) fail(409, 'That scratch can’t be undone anymore.')
@@ -261,6 +264,7 @@ async function undo(kv: KV, user: AuthUser, body: { id?: unknown }) {
     doc.chart!.completed_at = null
     return doc
   })
+  return amount
 }
 
 async function presence(kv: KV, user: AuthUser, body: { viewing?: unknown }) {
@@ -324,13 +328,15 @@ async function savePush(kv: KV, user: AuthUser, body: { endpoint?: unknown; keys
   const sub: PushSub = { endpoint, keys: { p256dh, auth }, created_at: new Date().toISOString() }
   const key = K.push(user.id)
   if (!(await kv.get(key))) await kv.set(key, [] as PushSub[], { onlyIfNew: true })
-  await update<PushSub[]>(kv, key, (list) => [sub, ...list.filter((s) => s.endpoint !== endpoint)].slice(0, 10))
+  const list = await update<PushSub[]>(kv, key, (l) => [sub, ...l.filter((s) => s.endpoint !== endpoint)].slice(0, 10))
+  return list.length
 }
 
 async function removePush(kv: KV, user: AuthUser, body: { endpoint?: unknown }) {
   const key = K.push(user.id)
-  if (!(await kv.get(key))) return
-  await update<PushSub[]>(kv, key, (list) => list.filter((s) => s.endpoint !== body.endpoint))
+  if (!(await kv.get(key))) return 0
+  const list = await update<PushSub[]>(kv, key, (l) => l.filter((s) => s.endpoint !== body.endpoint))
+  return list.length
 }
 
 /** Send a notification to every phone a person has turned notifications on for. */
@@ -374,7 +380,11 @@ export async function runReminders(kv: KV, siteUrl: string, now = new Date()) {
     if (!due) continue
     const couple = await myCouple(kv, userId)
     const unfinished = couple?.chart?.squares.some((q) => !q.scratched_at)
-    if (unfinished) report[userId] = `sent ${await notify(kv, userId, { ...PAYDAY, url: siteUrl + '/' })}`
+    if (unfinished) {
+      const sent = await notify(kv, userId, { ...PAYDAY, url: siteUrl + '/?from=reminder' })
+      report[userId] = `sent ${sent}`
+      if (sent) await track(kv, { id: userId, email: '' }, 'reminder_sent', undefined, now)
+    }
     await update<PaySchedule>(kv, key, (d) => ({ ...d, last_notified_on: local.date }))
   }
   return report
@@ -404,38 +414,65 @@ export async function handle(req: Request, user: AuthUser | null, kv: KV): Promi
         return json(await getState(kv, user))
       case 'POST /couple/create':
         await createCouple(kv, user, body)
+        await track(kv, user, 'couple_create')
         return json(await getState(kv, user))
       case 'POST /couple/join':
         await joinCouple(kv, user, body)
+        await track(kv, user, 'couple_join')
         return json(await getState(kv, user))
       case 'POST /profile':
         await rename(kv, user, body)
         return json({ ok: true })
-      case 'POST /chart':
+      case 'POST /chart': {
         await createChart(kv, user, body)
-        return json(await getState(kv, user))
-      case 'POST /scratch':
-        return json(await scratch(kv, user, body))
-      case 'POST /undo':
-        await undo(kv, user, body)
+        const state = await getState(kv, user)
+        await track(kv, user, 'chart_create', { goal: state.chart?.goal ?? 0, months: state.chart?.months ?? 0 })
+        return json(state)
+      }
+      case 'POST /scratch': {
+        const sq = await scratch(kv, user, body)
+        await track(kv, user, 'scratch', { amount: (sq as Square | null)?.amount ?? 0 })
+        return json(sq)
+      }
+      case 'POST /undo': {
+        const amount = await undo(kv, user, body)
+        await track(kv, user, 'undo', { amount })
         return json({ ok: true })
+      }
       case 'POST /presence':
         await presence(kv, user, body)
         return json({ ok: true })
-      case 'PUT /schedule':
-        return json(await saveSchedule(kv, user, body as Partial<PaySchedule>))
+      case 'PUT /schedule': {
+        const sched = await saveSchedule(kv, user, body as Partial<PaySchedule>)
+        await track(kv, user, 'schedule_save', { kind: sched.kind, hour: sched.remind_hour })
+        return json(sched)
+      }
       case 'GET /push/key':
         return json({ publicKey: (await vapidKeys(kv)).publicKey })
-      case 'POST /push':
-        await savePush(kv, user, body)
+      case 'POST /push': {
+        const devices = await savePush(kv, user, body)
+        await track(kv, user, 'push_on', { devices })
         return json({ ok: true })
-      case 'DELETE /push':
-        await removePush(kv, user, body)
+      }
+      case 'DELETE /push': {
+        const devices = await removePush(kv, user, body)
+        await track(kv, user, 'push_off', { devices })
         return json({ ok: true })
+      }
       case 'POST /push/test': {
-        const sent = await notify(kv, user.id, { title: 'Stax notifications are on', body: 'You’ll get a nudge like this on payday.', url: url.origin + '/' })
+        const sent = await notify(kv, user.id, { title: 'Stax notifications are on', body: 'You\u2019ll get a nudge like this on payday.', url: url.origin + '/' })
+        await track(kv, user, 'push_test', { sent })
         return json({ sent })
       }
+      case 'POST /event': {
+        const name = typeof body.name === 'string' ? body.name : ''
+        if (!CLIENT_EVENTS.has(name)) return json({ error: 'Unknown event.' }, 400)
+        await track(kv, user, name, cleanDetail(body.detail))
+        return json({ ok: true })
+      }
+      case 'GET /admin/overview':
+        if (!isAdmin(user)) return json({ error: 'Not found.' }, 404)
+        return json(await overview(kv))
       default:
         return json({ error: 'Not found.' }, 404)
     }

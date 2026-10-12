@@ -228,3 +228,46 @@ a:hover { color: var(--green-dark); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+/* ---------- Admin dashboard ---------- */
+.screen.admin { max-width: 760px; gap: 16px; }
+.admin-top { display: flex; align-items: center; justify-content: space-between; }
+.kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (min-width: 640px) { .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.kpi { background: var(--card); border: 1.5px solid var(--line-soft); border-radius: 18px; padding: 14px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.kpi-label { font-size: 13px; color: var(--muted); font-weight: 700; }
+.kpi-value { font-family: var(--display); font-size: 28px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.kpi-sub { font-size: 12px; color: var(--muted); line-height: 1.35; }
+.admin-panel { gap: 12px; }
+.panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.panel-head h2 { margin: 0; font-family: var(--display); font-size: 20px; font-weight: 800; }
+.readout { margin: 0; font-size: 14px; color: var(--ink-2); }
+.readout strong { font-family: var(--display); font-size: 22px; font-variant-numeric: tabular-nums; }
+.bars { display: grid; grid-template-columns: repeat(30, minmax(0, 1fr)); align-items: end; height: 120px; border-bottom: 1px solid var(--line); }
+.bar-hit { height: 100%; display: flex; align-items: flex-end; justify-content: center; padding: 0 1px; border: 0; background: transparent; cursor: pointer; }
+.bar-hit:hover, .bar-hit.on { background: rgba(46, 106, 76, 0.08); }
+.bar-mark { display: block; width: 100%; max-width: 16px; background: var(--green); border-radius: 4px 4px 0 0; }
+.bar-hit.on .bar-mark { background: var(--green-dark); }
+.bar-axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.table-wrap { overflow-x: auto; max-height: 320px; overflow-y: auto; }
+.admin-table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.admin-table th, .admin-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+.admin-table th { font-size: 12px; color: var(--muted); position: sticky; top: 0; background: var(--card); }
+.feature-list, .row-list, .activity { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.feature-list { gap: 12px; }
+.feature-list li { display: flex; flex-direction: column; gap: 6px; }
+.feature-line { display: flex; justify-content: space-between; gap: 12px; font-size: 15px; }
+.num { color: var(--ink); font-variant-numeric: tabular-nums; }
+.feature-track { display: block; height: 8px; border-radius: 999px; background: var(--green-tint); overflow: hidden; }
+.feature-track > span { display: block; height: 100%; background: var(--green); border-radius: 999px; }
+.row-list li { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--line-soft); }
+.row-list li:last-child { border-bottom: 0; }
+.row-main { display: flex; flex-direction: column; gap: 2px; }
+.row-main strong { font-size: 16px; }
+.row-facts { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.tag { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; background: var(--ground); border: 1px solid var(--line); font-size: 12px; font-weight: 700; color: var(--ink-2); }
+.tag.good { background: var(--green-tint); border-color: transparent; color: var(--green-dark); }
+.tag.warn { background: var(--amber-tint); border-color: transparent; color: var(--amber-ink); }
+.activity li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line-soft); font-size: 14px; }
+.activity li:last-child { border-bottom: 0; }
+.activity .small { white-space: nowrap; }

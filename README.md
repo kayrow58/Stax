@@ -59,6 +59,26 @@ Payday reminders run automatically every hour. No setup is needed: the notificat
 
 Tap **Settings → Invite your partner** and share the link, or read them the 6-character code. They create their own account and land on your chart.
 
+### 7. Turn on your admin dashboard (just for you)
+
+1. In Netlify, open **Project configuration → Environment variables** and click **Add a variable**.
+2. Set the key to `ADMIN_EMAILS` and the value to the email you sign in to Stax with. To add more than one admin, separate the emails with commas.
+3. Optional: add `ADMIN_TIMEZONE` (for example `America/Chicago`, the default) to choose which time zone the dashboard uses to count days.
+4. Go to **Deploys** and click **Trigger deploy → Deploy project** so the setting takes effect.
+5. In Stax, open **Settings**. You'll see an **Admin dashboard** button. Nobody else sees it, and the server refuses the data to anyone not on the list.
+
+The dashboard shows:
+
+- **Totals:** how many people have signed up, how many couples are paired, squares scratched, dollars tracked, and how many people have notifications on.
+- **Activity:** who's active today, this week, and this month, plus daily charts of active people and squares scratched (tap a bar, or switch to the table view).
+- **What people use:** each feature with how many times it was used and by how many people over the last 30 days. Features include scratching, filters, Surprise me, Undo, backing out of a card, sharing the invite, settings, and notifications.
+- **People:** each person's last visit, days active, opens, scratches, partner, device, whether they installed the app, and whether reminders led to a scratch.
+- **Couples:** each couple's progress, and whether both partners were active this week. That's the key question from the validation plan.
+- **Payday reminders:** how often a reminder was followed by a scratch within 24 hours.
+- **Recent activity:** a live feed of the last things people did.
+
+Usage is recorded on your own Netlify account, alongside the charts. Let your testers know their activity in the app is tracked to improve it.
+
 ---
 
 ## Good to know
@@ -75,6 +95,7 @@ Tap **Settings → Invite your partner** and share the link, or read them the 6-
 ```
 src/                         the app
   App.tsx                    sign-in → welcome → chart setup → invite → reminders → board
+  screens/Admin.tsx          the admin dashboard (admins only)
   screens/Board.tsx          the shared grid, filters, lift-and-expand, undo, partner updates
   components/ScratchCard.tsx the canvas scratch-off
   lib/useCouple.ts           loads data and keeps both phones in step
@@ -86,6 +107,7 @@ netlify/
   lib/app.ts                 all the backend logic
   lib/auth.ts                checks the signed-in user with Netlify Identity
   lib/kv.ts                  storage (Netlify Blobs)
+  lib/analytics.ts           usage recording + the admin dashboard data
 netlify.toml                 build settings
 ```
 

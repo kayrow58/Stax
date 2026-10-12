@@ -7,12 +7,14 @@ export type CoupleData = Omit<AppState, 'me' | 'partner_viewing'> & {
   error: string | null
   /** 401 from the server: the sign-in is no longer valid. */
   signedOut: boolean
+  isAdmin: boolean
 }
 
 const EMPTY: CoupleData = {
   loading: true,
   error: null,
   signedOut: false,
+  isAdmin: false,
   member: null,
   couple: null,
   members: [],
@@ -59,6 +61,7 @@ export function useCouple() {
       loading: false,
       error: null,
       signedOut: false,
+      isAdmin: s.me.is_admin,
       member: s.member,
       couple: s.couple,
       members: s.members,

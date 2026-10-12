@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api, errorText } from '../lib/api'
+import { track } from '../lib/track'
 import type { AppState, Couple, Member } from '../lib/types'
 import { BackIcon, CopyIcon, ShareIcon } from '../components/Icons'
 
@@ -24,6 +25,7 @@ export function Invite({ couple, members, me, onboarding, onNext, onBack, onJoin
   const partner = members.find((m) => m.user_id !== me.user_id)
 
   async function copy() {
+    track('invite_copy')
     try {
       await navigator.clipboard.writeText(prettyCode(couple.invite_code))
       setCopied(true)
@@ -34,6 +36,7 @@ export function Invite({ couple, members, me, onboarding, onNext, onBack, onJoin
   }
 
   async function share() {
+    track('invite_share')
     const text = `Join our savings chart on Stax! Code: ${prettyCode(couple.invite_code)}`
     if (navigator.share) {
       try {

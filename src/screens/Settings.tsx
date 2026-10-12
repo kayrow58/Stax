@@ -4,6 +4,7 @@ import { hourLabel, localTimeZone, nextPayday, prettyDate, todayIn } from '../li
 import { isInstalled, isIOS, pushIsOn, sendTestPush, turnOffPush, turnOnPush, type PushResult } from '../lib/push'
 import { setSoundOn, soundOn } from '../lib/feedback'
 import { api, errorText } from '../lib/api'
+import { track } from '../lib/track'
 import type { Member, PayKind, PaySchedule } from '../lib/types'
 import { BackIcon } from '../components/Icons'
 
@@ -34,9 +35,11 @@ type Props = {
   onInvite: () => void
   onNewChart: () => void
   onRenamed: () => void
+  /** Shown only to admins. */
+  onAdmin?: () => void
 }
 
-export function Settings({ me, schedule, defaultKind, onboarding, onSaved, onBack, onInvite, onNewChart, onRenamed }: Props) {
+export function Settings({ me, schedule, defaultKind, onboarding, onSaved, onBack, onInvite, onNewChart, onRenamed, onAdmin }: Props) {
   const tz = schedule?.timezone || localTimeZone()
   const today = todayIn(tz)
   const [kind, setKind] = useState<PayKind>(schedule?.kind ?? defaultKind ?? 'biweekly')
@@ -53,6 +56,8 @@ export function Settings({ me, schedule, defaultKind, onboarding, onSaved, onBac
 
   useEffect(() => {
     void pushIsOn().then(setPush)
+    if (!onboarding) track('settings_open')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const needsAnchor = kind !== 'semimonthly'
@@ -191,6 +196,7 @@ export function Settings({ me, schedule, defaultKind, onboarding, onSaved, onBac
             className="switch-row"
             onClick={() => {
               localStorage.setItem('ss.dense', dense ? '0' : '1')
+              track('grid_toggle', { classic: !dense })
               setDense(!dense)
             }}
           >
@@ -208,6 +214,7 @@ export function Settings({ me, schedule, defaultKind, onboarding, onSaved, onBac
             className="switch-row"
             onClick={() => {
               setSoundOn(!sound)
+              track('sound_toggle', { on: !sound })
               setSound(!sound)
             }}
           >
@@ -232,6 +239,11 @@ export function Settings({ me, schedule, defaultKind, onboarding, onSaved, onBac
           </button>
         ) : (
           <>
+            {onAdmin && (
+              <button type="button" className="btn outline small" onClick={onAdmin}>
+                Admin dashboard
+              </button>
+            )}
             <button type="button" className="link-btn" onClick={onInvite}>
               Invite your partner
             </button>

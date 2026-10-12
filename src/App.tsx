@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { getUser, handleAuthCallback, logout, onAuthChange, type User } from '@netlify/identity'
 import { api, errorText } from './lib/api'
 import { useCouple } from './lib/useCouple'
+import { watchVisits } from './lib/track'
 import type { AppState, PayKind } from './lib/types'
 import { NewPassword, SignIn } from './screens/SignIn'
 import { Welcome } from './screens/Welcome'
@@ -9,6 +10,7 @@ import { Setup } from './screens/Setup'
 import { Invite } from './screens/Invite'
 import { Settings } from './screens/Settings'
 import { Board } from './screens/Board'
+import { Admin } from './screens/Admin'
 
 const INVITE_KEY = 'ss.invite'
 
@@ -61,7 +63,7 @@ export default function App() {
   return <Home key={user.id} />
 }
 
-type View = 'board' | 'invite' | 'settings' | 'newchart'
+type View = 'board' | 'invite' | 'settings' | 'newchart' | 'admin'
 type Onboarding = null | 'invite' | 'reminders'
 
 function Home() {
@@ -70,6 +72,8 @@ function Home() {
   const [onboarding, setOnboarding] = useState<Onboarding>(null)
   const [chosenFreq, setChosenFreq] = useState<PayKind | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+
+  useEffect(() => watchVisits(), [])
 
   // Already on a solo chart and then opened a partner's invite link: switch over.
   useEffect(() => {
@@ -101,7 +105,9 @@ function Home() {
   if (c.error && !c.member) return <ErrorScreen message={c.error} onRetry={() => void c.reload()} />
 
   let screen: React.ReactNode
-  if (!c.member || !c.couple) {
+  if (view === 'admin' && c.isAdmin) {
+    screen = <Admin onBack={() => setView('settings')} />
+  } else if (!c.member || !c.couple) {
     screen = (
       <Welcome
         inviteCode={pendingInvite()}
@@ -160,6 +166,7 @@ function Home() {
         onInvite={() => setView('invite')}
         onNewChart={() => setView('newchart')}
         onRenamed={() => void c.reload()}
+        onAdmin={c.isAdmin ? () => setView('admin') : undefined}
       />
     )
   } else {

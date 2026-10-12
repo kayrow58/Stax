@@ -3,6 +3,7 @@ import { crossedMilestone, money } from '../lib/chart'
 import { chime } from '../lib/feedback'
 import { isPayday, todayIn } from '../lib/payday'
 import { api, errorText } from '../lib/api'
+import { track } from '../lib/track'
 import type { RemoteScratch } from '../lib/useCouple'
 import type { Chart, Member, PaySchedule, Square } from '../lib/types'
 import { Confetti } from '../components/Confetti'
@@ -114,6 +115,7 @@ export function Board(props: Props) {
     setSel(sq)
     setPhase('lift')
     setViewing(sq.id)
+    track('card_open', { amount: sq.amount })
     showToast(null)
     history.pushState({ ssCard: 1 }, '')
     liftTimer.current = window.setTimeout(() => setPhase('card'), 300)
@@ -122,6 +124,7 @@ export function Board(props: Props) {
   function surprise() {
     const pool = squares.filter((s) => !s.scratched_at && matches(s.amount))
     if (!pool.length) return
+    track('surprise')
     const pick = pool[Math.floor(Math.random() * pool.length)]
     const el = document.querySelector<HTMLElement>(`[data-sq="${pick.id}"]`)
     if (!el) return
@@ -265,7 +268,10 @@ export function Board(props: Props) {
       ) : (
         <div className="helpers">
           {FILTERS.map(([k, l]) => (
-            <button key={k} type="button" className="pill" aria-pressed={filter === k} onClick={() => setFilter(k)}>
+            <button key={k} type="button" className="pill" aria-pressed={filter === k} onClick={() => {
+                setFilter(k)
+                if (k !== 'all') track('filter', { value: l })
+              }}>
               {l}
             </button>
           ))}
@@ -312,7 +318,10 @@ export function Board(props: Props) {
           key={sel.id}
           amount={sel.amount}
           from={fromRect}
-          onClose={closeCard}
+          onClose={() => {
+            track('card_back', { amount: sel.amount })
+            closeCard()
+          }}
           onFirstScratch={() => (lockedRef.current = true)}
           onComplete={() => void complete()}
         />
