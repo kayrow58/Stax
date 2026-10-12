@@ -13,7 +13,7 @@ Everything runs on **Netlify**. There are no other services to sign up for, and 
 - Real scratch-off with sound, vibration (Android), and confetti; bigger celebrations at 25/50/75/100%
 - "Square scratched · Undo" for 10 minutes after each scratch
 - If you both try to scratch the same square, only the first one counts
-- Filter chips (Under $50, Around $100, Big ones) and Surprise me. Nothing is ever locked out
+- Small, Medium and Large filters (each exactly a third of the squares) and Surprise me. Nothing is ever locked out. New charts mix small, medium and large squares evenly across the board
 - Per-partner payday reminders (weekly, every 2 weeks, 1st & 15th, monthly) as phone notifications
 - Tracker only: Stax never touches money
 

@@ -177,6 +177,7 @@ input[type='date'].input::-webkit-calendar-picker-indicator { opacity: 0.6; }
   font-size: 14px; font-weight: 700; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;
 }
 .pill[aria-pressed='true'] { background: var(--ink); color: var(--ground); border-color: var(--ink); }
+.pill-range { font-weight: 500; font-size: 13px; opacity: 0.75; }
 .pill.surprise { border-style: dashed; border-color: var(--amber); background: var(--amber-tint); color: var(--amber-ink); }
 
 .grid-wrap { flex: 1 1 auto; padding: 4px 16px calc(104px + env(safe-area-inset-bottom)); }

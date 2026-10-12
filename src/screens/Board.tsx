@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { crossedMilestone, money } from '../lib/chart'
+import { crossedMilestone, money, TIERS, tierMap, tierRanges, type Tier } from '../lib/chart'
 import { chime } from '../lib/feedback'
 import { isPayday, todayIn } from '../lib/payday'
 import { api, errorText } from '../lib/api'
@@ -11,24 +11,8 @@ import { ScratchCard } from '../components/ScratchCard'
 import { BellIcon, Gear, Sparkle } from '../components/Icons'
 import { denseGrid } from './Settings'
 
-type Filter = 'all' | 'under50' | 'around100' | 'big'
-const FILTERS: [Filter, string][] = [
-  ['all', 'All'],
-  ['under50', 'Under $50'],
-  ['around100', 'Around $100'],
-  ['big', 'Big ones'],
-]
-
-/** Filters scale with the chart so they make sense for small goals too. */
-function matcher(filter: Filter, maxAmount: number) {
-  const scale = maxAmount / 300
-  return (a: number) => {
-    if (filter === 'under50') return a < 50 * scale
-    if (filter === 'around100') return a >= 75 * scale && a <= 126 * scale
-    if (filter === 'big') return a >= 200 * scale
-    return true
-  }
-}
+type Filter = 'all' | Tier
+const FILTER_NAMES: Record<Tier, string> = { small: 'Small', medium: 'Medium', large: 'Large' }
 
 type Toast = { msg: string; undoId?: number } | null
 
@@ -74,8 +58,10 @@ export function Board(props: Props) {
   const pct = Math.min(100, (total / chart.goal) * 100)
   const next = [25, 50, 75, 100].find((m) => total < (chart.goal * m) / 100)
   const remaining = squares.filter((s) => !s.scratched_at).length
-  const maxAmount = squares.reduce((m, s) => Math.max(m, s.amount), 1)
-  const matches = matcher(filter, maxAmount)
+  // Small / medium / large: equal thirds of the squares, by price.
+  const tiers = useMemo(() => tierMap(squares), [squares])
+  const ranges = useMemo(() => tierRanges(squares), [squares])
+  const matches = (sq: Square) => filter === 'all' || tiers.get(sq.id) === filter
 
   const showToast = useCallback((t: Toast, ms = 5000) => {
     window.clearTimeout(toastTimer.current)
@@ -123,7 +109,7 @@ export function Board(props: Props) {
   }
 
   function surprise() {
-    const pool = squares.filter((s) => !s.scratched_at && matches(s.amount))
+    const pool = squares.filter((s) => !s.scratched_at && matches(s))
     if (!pool.length) return
     track('surprise')
     const pick = pool[Math.floor(Math.random() * pool.length)]
@@ -273,14 +259,29 @@ export function Board(props: Props) {
         </section>
       ) : (
         <div className="helpers">
-          {FILTERS.map(([k, l]) => (
-            <button key={k} type="button" className="pill" aria-pressed={filter === k} onClick={() => {
-                setFilter(k)
-                if (k !== 'all') track('filter', { value: l })
-              }}>
-              {l}
-            </button>
-          ))}
+          <button type="button" className="pill" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>
+            All
+          </button>
+          {TIERS.map((t) => {
+            const r = ranges[t]
+            const label = FILTER_NAMES[t]
+            return (
+              <button
+                key={t}
+                type="button"
+                className="pill"
+                aria-pressed={filter === t}
+                aria-label={`${label} squares, ${money(r.min)} to ${money(r.max)}`}
+                onClick={() => {
+                  setFilter(filter === t ? 'all' : t)
+                  if (filter !== t) track('filter', { value: label })
+                }}
+              >
+                {label}
+                {r.count > 0 && <span className="pill-range">{money(r.min)}–{money(r.max)}</span>}
+              </button>
+            )
+          })}
           <button type="button" className="pill surprise" onClick={surprise}>
             <Sparkle /> Surprise me
           </button>
@@ -291,7 +292,7 @@ export function Board(props: Props) {
         <div className={'grid' + (dense ? ' dense' : '') + (phase !== 'grid' ? ' lifting' : '')}>
           {ordered.map((sq) => {
             const done = Boolean(sq.scratched_at)
-            const isMatch = filter !== 'all' && matches(sq.amount)
+            const isMatch = filter !== 'all' && matches(sq)
             const cls = [
               'sq',
               done && 'done',

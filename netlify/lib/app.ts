@@ -2,7 +2,7 @@ import webpush from 'web-push'
 import type { KV } from './kv'
 import type { AuthUser } from './auth'
 import { CLIENT_EVENTS, cleanDetail, isAdmin, overview, track } from './analytics'
-import { MAX_GOAL, MIN_GOAL, SQUARES, money, priceSquares } from '../../src/lib/chart'
+import { MAX_GOAL, MIN_GOAL, SQUARES, balancedOrder, money, priceSquares } from '../../src/lib/chart'
 import { isPayday, localDateHour } from '../../src/lib/payday'
 import type { AppState, Chart, Couple, Member, PayKind, PaySchedule, Square } from '../../src/lib/types'
 
@@ -72,14 +72,6 @@ const cleanName = (v: unknown, field = 'name', max = 40) => {
 
 const normalizeCode = (v: unknown) =>
   (typeof v === 'string' ? v : '').toUpperCase().replace(/[^A-Z0-9]/g, '')
-
-function shuffle<T>(a: T[]): T[] {
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[a[i], a[j]] = [a[j], a[i]]
-  }
-  return a
-}
 
 async function myCouple(kv: KV, userId: string) {
   const u = await kv.get<UserDoc>(K.user(userId))
@@ -206,7 +198,10 @@ async function createChart(kv: KV, user: AuthUser, body: { name?: unknown; goal?
 
   const n = SQUARES
   const amounts = priceSquares(goal, n)
-  const positions = shuffle(Array.from({ length: n }, (_, i) => i))
+  // Grid spot for each square, with small/medium/large evenly mixed across the board.
+  const order = balancedOrder(n)
+  const positions: number[] = []
+  order.forEach((rank, spot) => (positions[rank] = spot))
   const chart: ChartDoc = {
     id: crypto.randomUUID(),
     name,

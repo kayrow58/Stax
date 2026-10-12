@@ -45,3 +45,67 @@ export const MILESTONES = [25, 50, 75, 100]
 export function crossedMilestone(goal: number, before: number, after: number): number | null {
   return MILESTONES.find((m) => before < (goal * m) / 100 && after >= (goal * m) / 100) ?? null
 }
+
+// ---------- Small / medium / large ----------
+
+export type Tier = 'small' | 'medium' | 'large'
+export const TIERS: Tier[] = ['small', 'medium', 'large']
+
+/**
+ * Splits a chart's squares into three equal groups by price
+ * (33 small, 34 medium, 33 large on a 100-square chart).
+ */
+export function tierMap(squares: { id: number; amount: number }[]): Map<number, Tier> {
+  const sorted = [...squares].sort((a, b) => a.amount - b.amount || a.id - b.id)
+  const n = sorted.length
+  const cut1 = Math.round(n / 3)
+  const cut2 = Math.round((2 * n) / 3)
+  const map = new Map<number, Tier>()
+  sorted.forEach((s, i) => map.set(s.id, i < cut1 ? 'small' : i < cut2 ? 'medium' : 'large'))
+  return map
+}
+
+/** Price range of each tier, e.g. small: $2–$99. */
+export function tierRanges(squares: { id: number; amount: number }[]) {
+  const map = tierMap(squares)
+  const out: Record<Tier, { min: number; max: number; count: number }> = {
+    small: { min: Infinity, max: 0, count: 0 },
+    medium: { min: Infinity, max: 0, count: 0 },
+    large: { min: Infinity, max: 0, count: 0 },
+  }
+  for (const s of squares) {
+    const r = out[map.get(s.id)!]
+    r.min = Math.min(r.min, s.amount)
+    r.max = Math.max(r.max, s.amount)
+    r.count++
+  }
+  return out
+}
+
+/**
+ * A shuffled grid order where small, medium and large squares are evenly
+ * mixed: every run of three squares holds one of each (in random order),
+ * so no part of the board is all big or all small.
+ * Takes n squares ranked smallest→largest (0…n-1) and returns them in grid order.
+ */
+export function balancedOrder(n: number, random: () => number = Math.random): number[] {
+  const shuffle = <T,>(a: T[]) => {
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1))
+      ;[a[i], a[j]] = [a[j], a[i]]
+    }
+    return a
+  }
+  const cut1 = Math.round(n / 3)
+  const cut2 = Math.round((2 * n) / 3)
+  const groups = [
+    shuffle(Array.from({ length: cut1 }, (_, i) => i)),
+    shuffle(Array.from({ length: cut2 - cut1 }, (_, i) => cut1 + i)),
+    shuffle(Array.from({ length: n - cut2 }, (_, i) => cut2 + i)),
+  ]
+  const order: number[] = []
+  while (groups.some((g) => g.length)) {
+    for (const g of shuffle(groups.filter((x) => x.length))) order.push(g.pop()!)
+  }
+  return order
+}
