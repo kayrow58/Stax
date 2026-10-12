@@ -4,16 +4,33 @@ import { Logo } from '../components/Icons'
 
 type Mode = 'signup' | 'login' | 'forgot'
 
-function authMessage(e: unknown, mode: Mode): string {
-  if (e instanceof MissingIdentityError) return 'Sign-in isn’t turned on for this site yet. In Netlify, turn on Identity (setup guide, step 3).'
+const IDENTITY_OFF = 'Sign-in isn\u2019t turned on for this site yet. In Netlify, open Project configuration \u2192 Identity and click Enable Identity (setup guide, step 2).'
+
+/** Is Netlify Identity actually switched on for this site? */
+async function identityIsOn(): Promise<boolean> {
+  try {
+    const r = await fetch('/.netlify/identity/settings', { cache: 'no-store' })
+    return r.ok && (r.headers.get('content-type') ?? '').includes('json')
+  } catch {
+    return true // offline or similar: don't blame Identity
+  }
+}
+
+async function authMessage(e: unknown, mode: Mode): Promise<string> {
+  console.error('sign-in error', e)
+  if (e instanceof MissingIdentityError) return IDENTITY_OFF
   const status = (e as { status?: number }).status
   const msg = (e as Error)?.message ?? ''
-  if (/already registered|already exists/i.test(msg)) return 'There’s already an account with that email. Log in instead.'
+  if (/already registered|already exists/i.test(msg)) return 'There\u2019s already an account with that email. Log in instead.'
+  if (/signups? not allowed|signup.*disabled/i.test(msg))
+    return 'New sign-ups are turned off. In Netlify, set Identity \u2192 Registration to Open.'
   if (/not confirmed|confirm/i.test(msg)) return 'Please confirm your email first. Check your inbox for the link.'
+  if (/failed to fetch|network/i.test(msg)) return 'Couldn\u2019t reach Stax. Check your connection and try again.'
+  if (!(await identityIsOn())) return IDENTITY_OFF
   if (status === 400 || status === 401 || /invalid/i.test(msg))
-    return mode === 'login' ? 'That email and password don’t match.' : msg || 'Please check your details.'
+    return mode === 'login' ? 'That email and password don\u2019t match.' : msg || 'Please check your details.'
   if (/password/i.test(msg)) return msg
-  return 'Something went wrong. Please try again.'
+  return msg ? `Something went wrong: ${msg}` : 'Something went wrong. Please try again.'
 }
 
 export function SignIn({ joining, notice }: { joining: boolean; notice?: string | null }) {
@@ -47,7 +64,7 @@ export function SignIn({ joining, notice }: { joining: boolean; notice?: string 
         setMode('login')
       }
     } catch (err) {
-      setError(authMessage(err, mode))
+      setError(await authMessage(err, mode))
     } finally {
       setBusy(false)
     }

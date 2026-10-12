@@ -30,6 +30,8 @@ Everything runs on **Netlify**. There are no other services to sign up for, and 
 
 ### 2. Turn on accounts (Netlify Identity)
 
+**Accounts won't work until you do this step.** Without it, creating an account shows "Sign-in isn't turned on for this site yet."
+
 1. In your Netlify project, open **Project configuration → Identity**. On older screens it may be **Site configuration → Identity** or an **Identity** tab.
 2. Click **Enable Identity**.
 3. Under **Registration**, leave it **Open** so new people can sign up.
