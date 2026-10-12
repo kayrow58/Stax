@@ -21,7 +21,8 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--body); -webkit-tap-highlight-color: transparent; }
-body { min-height: 100dvh; }
+body { min-height: 100dvh; overflow-x: hidden; }
+.screen > *, .stack-8 > *, .panel > * { min-width: 0; }
 button, input, select { font: inherit; color: inherit; }
 a { color: var(--green); }
 a:hover { color: var(--green-dark); }
@@ -122,6 +123,12 @@ a:hover { color: var(--green-dark); }
 .switch-row[aria-checked='true'] .track { background: var(--green); }
 .switch-row[aria-checked='true'] .track::after { left: 23px; }
 
+input[type='date'].input {
+  -webkit-appearance: none; appearance: none; display: block; min-width: 0; max-width: 100%;
+  line-height: 50px; text-align: left;
+}
+input[type='date'].input::-webkit-date-and-time-value { text-align: left; margin: 0; }
+input[type='date'].input::-webkit-calendar-picker-indicator { opacity: 0.6; }
 .select { height: 48px; border-radius: 14px; border: 1.5px solid #c9d1c6; background: var(--card); padding: 0 12px; font-size: 16px; width: 100%; }
 
 .mini-grid { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; }
@@ -130,7 +137,7 @@ a:hover { color: var(--green-dark); }
 .code-big { font-family: var(--display); font-size: 40px; font-weight: 800; letter-spacing: 0.12em; }
 
 /* ---------- Board ---------- */
-.board { max-width: 480px; margin: 0 auto; height: 100dvh; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+.board { max-width: 480px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; position: relative; }
 .board > * { flex: 0 0 auto; }
 .board-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: calc(16px + env(safe-area-inset-top)) 20px 12px; }
 .board-head h1 { margin: 0; font-family: var(--display); font-size: 26px; font-weight: 800; letter-spacing: -0.01em; }
@@ -140,6 +147,12 @@ a:hover { color: var(--green-dark); }
 .tally-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .tally-total { font-family: var(--display); font-size: 34px; font-weight: 800; line-height: 1; }
 .tally-of { font-size: 14px; color: #b9c6bc; margin-left: 6px; }
+.tally-right { display: flex; align-items: center; gap: 10px; }
+.tally-edit {
+  min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1.5px solid #4a5e51; background: transparent;
+  color: var(--ground); font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.tally-edit:hover { background: #22352a; }
 .tally-pct { font-size: 15px; font-weight: 700; color: var(--gold); }
 .tally-next { font-size: 13px; color: #b9c6bc; }
 .bar { height: 10px; background: #2f4337; border-radius: 999px; overflow: hidden; position: relative; }
@@ -154,7 +167,10 @@ a:hover { color: var(--green-dark); }
 .presence { display: flex; align-items: center; gap: 8px; padding: 10px 20px 0; font-size: 13px; color: var(--muted); }
 .dot-pulse { width: 8px; height: 8px; border-radius: 50%; background: #b87514; animation: pulse 1.6s ease-in-out infinite; flex: 0 0 auto; }
 
-.helpers { display: flex; gap: 8px; padding: 12px 16px 4px; overflow-x: auto; scrollbar-width: none; }
+.helpers {
+  display: flex; gap: 8px; padding: calc(10px + env(safe-area-inset-top)) 16px 10px; margin-top: 2px; overflow-x: auto; scrollbar-width: none;
+  position: sticky; top: 0; z-index: 5; background: var(--ground);
+}
 .helpers::-webkit-scrollbar { display: none; }
 .pill {
   flex: 0 0 auto; min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--card);
@@ -163,7 +179,7 @@ a:hover { color: var(--green-dark); }
 .pill[aria-pressed='true'] { background: var(--ink); color: var(--ground); border-color: var(--ink); }
 .pill.surprise { border-style: dashed; border-color: var(--amber); background: var(--amber-tint); color: var(--amber-ink); }
 
-.grid-wrap { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px 16px calc(104px + env(safe-area-inset-bottom)); }
+.grid-wrap { flex: 1 1 auto; padding: 4px 16px calc(104px + env(safe-area-inset-bottom)); }
 .grid { display: grid; gap: 8px; grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .grid.dense { grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; }
 .sq {

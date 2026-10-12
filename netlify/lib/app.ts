@@ -2,7 +2,7 @@ import webpush from 'web-push'
 import type { KV } from './kv'
 import type { AuthUser } from './auth'
 import { CLIENT_EVENTS, cleanDetail, isAdmin, overview, track } from './analytics'
-import { planChart } from '../../src/lib/chart'
+import { MAX_GOAL, MIN_GOAL, SQUARES, money, priceSquares } from '../../src/lib/chart'
 import { isPayday, localDateHour } from '../../src/lib/payday'
 import type { AppState, Chart, Couple, Member, PayKind, PaySchedule, Square } from '../../src/lib/types'
 
@@ -200,17 +200,18 @@ async function createChart(kv: KV, user: AuthUser, body: { name?: unknown; goal?
   const couple = await requireCouple(kv, user.id)
   const goal = Math.floor(Number(body.goal))
   const months = Math.floor(Number(body.months))
-  if (!(goal >= 55 && goal <= 10_000_000)) fail(400, 'Pick a goal between $55 and $10,000,000.')
+  checkGoal(goal)
   if (!(months >= 1 && months <= 120)) fail(400, 'Pick a timeframe between 1 and 120 months.')
   const name = typeof body.name === 'string' && body.name.trim() ? cleanName(body.name, 'chart name', 60) : 'Our savings chart'
 
-  const { n, step, total } = planChart(goal)
+  const n = SQUARES
+  const amounts = priceSquares(goal, n)
   const positions = shuffle(Array.from({ length: n }, (_, i) => i))
   const chart: ChartDoc = {
     id: crypto.randomUUID(),
     name,
-    goal: total,
-    step,
+    goal,
+    step: Math.round(goal / ((n * (n + 1)) / 2)),
     square_count: n,
     months,
     created_at: new Date().toISOString(),
@@ -218,7 +219,7 @@ async function createChart(kv: KV, user: AuthUser, body: { name?: unknown; goal?
     squares: Array.from({ length: n }, (_, i) => ({
       id: i + 1,
       position: positions[i],
-      amount: (i + 1) * step,
+      amount: amounts[i],
       scratched_at: null,
       scratched_by: null,
     })),
@@ -231,6 +232,44 @@ async function createChart(kv: KV, user: AuthUser, body: { name?: unknown; goal?
   })
   const prev = previous as ChartDoc | null
   if (prev) await kv.set(K.archive(couple.id, prev.id), prev)
+}
+
+function checkGoal(goal: number) {
+  if (!(Number.isInteger(goal) && goal >= MIN_GOAL && goal <= MAX_GOAL))
+    fail(400, `Pick a goal between ${money(MIN_GOAL)} and ${money(MAX_GOAL)}.`)
+}
+
+/**
+ * Change the goal (and optionally the name) of the active chart.
+ * Squares already scratched keep their amounts (that money is saved);
+ * the open squares are repriced so the whole chart adds up to the new goal.
+ */
+async function editChart(kv: KV, user: AuthUser, body: { goal?: unknown; name?: unknown }) {
+  const couple = await requireCouple(kv, user.id)
+  const goal = Math.floor(Number(body.goal))
+  checkGoal(goal)
+  const name = typeof body.name === 'string' && body.name.trim() ? cleanName(body.name, 'chart name', 60) : null
+  await update<CoupleDoc>(kv, K.couple(couple.id), (doc) => {
+    const chart = doc.chart ?? fail(400, 'Create a chart first.')
+    if (name) chart.name = name
+    if (goal === chart.goal) return doc
+    const done = chart.squares.filter((s) => s.scratched_at)
+    const open = chart.squares.filter((s) => !s.scratched_at)
+    const saved = done.reduce((t, s) => t + s.amount, 0)
+    const remaining = goal - saved
+    if (!open.length) fail(400, 'Every square is already scratched. Start a new chart to keep saving.')
+    if (remaining < open.length)
+      fail(
+        400,
+        `You've already saved ${money(saved)}. With ${open.length} squares left at $1 or more each, the goal needs to be at least ${money(saved + open.length)}.`,
+      )
+    // Keep the same order: the smallest open square stays the smallest, and so on.
+    const prices = priceSquares(remaining, open.length)
+    ;[...open].sort((a, b) => a.amount - b.amount || a.id - b.id).forEach((s, i) => (s.amount = prices[i]))
+    chart.goal = goal
+    chart.completed_at = null
+    return doc
+  })
 }
 
 async function scratch(kv: KV, user: AuthUser, body: { id?: unknown }) {
@@ -427,6 +466,12 @@ export async function handle(req: Request, user: AuthUser | null, kv: KV): Promi
         await createChart(kv, user, body)
         const state = await getState(kv, user)
         await track(kv, user, 'chart_create', { goal: state.chart?.goal ?? 0, months: state.chart?.months ?? 0 })
+        return json(state)
+      }
+      case 'POST /chart/edit': {
+        await editChart(kv, user, body)
+        const state = await getState(kv, user)
+        await track(kv, user, 'goal_edit', { goal: state.chart?.goal ?? 0 })
         return json(state)
       }
       case 'POST /scratch': {

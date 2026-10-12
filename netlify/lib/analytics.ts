@@ -14,6 +14,7 @@ export const EVENT_LABELS: Record<string, string> = {
   couple_create: 'Started a chart group',
   couple_join: 'Joined a partner',
   chart_create: 'Created a chart',
+  goal_edit: 'Changed the goal',
   card_open: 'Opened a scratch card',
   card_back: 'Backed out of a card',
   scratch: 'Scratched a square',
@@ -318,7 +319,7 @@ export async function overview(kv: KV, now = new Date()): Promise<AdminOverview>
 function describe(name: string, d: Detail): string | null {
   if (name === 'scratch' || name === 'undo') return typeof d.amount === 'number' ? `$${d.amount}` : null
   if (name === 'filter') return typeof d.value === 'string' ? d.value : null
-  if (name === 'chart_create') return typeof d.goal === 'number' ? `$${d.goal.toLocaleString('en-US')} goal` : null
+  if (name === 'chart_create' || name === 'goal_edit') return typeof d.goal === 'number' ? `$${d.goal.toLocaleString('en-US')} goal` : null
   if (name === 'schedule_save') {
     const kinds: Record<string, string> = { weekly: 'weekly', biweekly: 'every 2 weeks', semimonthly: '1st and 15th', monthly: 'monthly' }
     return typeof d.kind === 'string' ? (kinds[d.kind] ?? d.kind) : null

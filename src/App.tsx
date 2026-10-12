@@ -72,6 +72,7 @@ function Home() {
   const [onboarding, setOnboarding] = useState<Onboarding>(null)
   const [chosenFreq, setChosenFreq] = useState<PayKind | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [focusGoal, setFocusGoal] = useState(false)
 
   useEffect(() => watchVisits(), [])
 
@@ -167,6 +168,10 @@ function Home() {
         onNewChart={() => setView('newchart')}
         onRenamed={() => void c.reload()}
         onAdmin={c.isAdmin ? () => setView('admin') : undefined}
+        chart={c.chart}
+        squares={c.squares}
+        focusGoal={focusGoal}
+        onChartUpdated={c.apply}
       />
     )
   } else {
@@ -182,7 +187,14 @@ function Home() {
         setViewing={c.setViewing}
         patchSquare={c.patchSquare}
         mutate={c.mutate}
-        onSettings={() => setView('settings')}
+        onSettings={() => {
+          setFocusGoal(false)
+          setView('settings')
+        }}
+        onEditGoal={() => {
+          setFocusGoal(true)
+          setView('settings')
+        }}
         onInvite={() => setView('invite')}
         onNewChart={() => setView('newchart')}
       />

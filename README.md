@@ -7,7 +7,7 @@ Everything runs on **Netlify**. There are no other services to sign up for, and 
 **What's in this version:**
 
 - Accounts with email and password, including "forgot password" (Netlify Identity)
-- Chart generator: enter any goal and timeframe; the default is the classic 100 squares from $3 to $300 ($15,150)
+- Chart generator: enter any goal and timeframe. Every chart has 100 squares, priced so they add up to exactly your goal (change it any time from the board or Settings; squares already scratched keep their amounts)
 - One shared board per couple. Your partner's scratches show up on your phone within a few seconds, and so does the square they have open (it pulses)
 - Tap a square: it lifts, then grows into a scratch card. Back out any time before the first scratch
 - Real scratch-off with sound, vibration (Android), and confetti; bigger celebrations at 25/50/75/100%

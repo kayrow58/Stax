@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { money, PAYDAYS_PER_YEAR, planChart } from '../lib/chart'
+import { MAX_GOAL, MIN_GOAL, money, PAYDAYS_PER_YEAR, planChart } from '../lib/chart'
 import { api, errorText } from '../lib/api'
 import type { AppState, PayKind } from '../lib/types'
 
@@ -22,14 +22,14 @@ type Props = {
 /** The chart generator: goal + timeframe → squares that add up exactly. */
 export function Setup({ replacing, defaultFreq, onCreated, onCancel }: Props) {
   const [name, setName] = useState('')
-  const [goalStr, setGoalStr] = useState('15150')
+  const [goalStr, setGoalStr] = useState('15000')
   const [months, setMonths] = useState(12)
   const [freq, setFreq] = useState<PayKind>(defaultFreq ?? 'biweekly')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const goal = Math.floor(Number(goalStr) || 0)
-  const valid = goal >= 55 && goal <= 10_000_000
+  const valid = goal >= MIN_GOAL && goal <= MAX_GOAL
   const plan = planChart(goal)
   const paydays = Math.max(1, Math.round((PAYDAYS_PER_YEAR[freq] * months) / 12))
   const perPayday = plan.n / paydays
@@ -54,7 +54,7 @@ export function Setup({ replacing, defaultFreq, onCreated, onCancel }: Props) {
       <div className="stack">
         <span className="eyebrow">{replacing ? 'New chart' : 'Step 1 of 3'}</span>
         <h1 className="title">Build your chart</h1>
-        <p className="lede">Pick a goal and a timeframe. We&rsquo;ll size the squares so the chart adds up exactly.</p>
+        <p className="lede">Pick any goal. Your chart always has 100 squares, priced so they add up to exactly your goal.</p>
       </div>
 
       {replacing && (
@@ -78,11 +78,13 @@ export function Setup({ replacing, defaultFreq, onCreated, onCancel }: Props) {
             id="goal"
             type="text"
             inputMode="numeric"
-            value={goalStr}
+            autoComplete="off"
+            value={goalStr ? Number(goalStr).toLocaleString('en-US') : ''}
             onChange={(e) => setGoalStr(e.target.value.replace(/[^\d]/g, '').slice(0, 8))}
           />
         </div>
-        {!valid && <span className="error">Pick a goal between $55 and $10,000,000.</span>}
+        <span className="small">You can change this later in Settings.</span>
+        {!valid && goalStr !== '' && <span className="error">Pick a goal between {money(MIN_GOAL)} and {money(MAX_GOAL)}.</span>}
       </div>
 
       <div className="stack-8">
@@ -116,7 +118,7 @@ export function Setup({ replacing, defaultFreq, onCreated, onCancel }: Props) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
             <strong style={{ fontFamily: 'var(--display)', fontSize: 22 }}>{plan.n} squares</strong>
             <span className="small" style={{ fontWeight: 500 }}>
-              {money(plan.step)} to {money(plan.step * plan.n)}
+              {money(plan.min)} to {money(plan.max)}
             </span>
           </div>
           <div className="mini-grid" aria-hidden="true">
@@ -131,7 +133,6 @@ export function Setup({ replacing, defaultFreq, onCreated, onCancel }: Props) {
             <span>
               {paydays} paydays in {months} months, so {perLabel} (about {money(plan.total / paydays)}) each payday.
             </span>
-            {plan.rounded && <span style={{ color: 'var(--amber-ink)' }}>Rounded so every square is a whole dollar.</span>}
           </div>
         </section>
       )}
@@ -141,9 +142,6 @@ export function Setup({ replacing, defaultFreq, onCreated, onCancel }: Props) {
       <div className="stack-8 push-down">
         <button type="button" className="btn" disabled={!valid || busy} onClick={() => void create()}>
           {busy ? 'Creating…' : replacing ? 'Start the new chart' : 'Create our chart'}
-        </button>
-        <button type="button" className="link-btn" onClick={() => { setGoalStr('15150'); setMonths(12) }}>
-          Use the classic $3 to $300 chart
         </button>
         {onCancel && (
           <button type="button" className="link-btn" onClick={onCancel}>

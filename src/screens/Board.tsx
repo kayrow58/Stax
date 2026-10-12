@@ -44,6 +44,7 @@ type Props = {
   patchSquare: (id: number, patch: Partial<Square>) => void
   mutate: <T>(fn: () => Promise<T>) => Promise<T>
   onSettings: () => void
+  onEditGoal: () => void
   onInvite: () => void
   onNewChart: () => void
 }
@@ -73,7 +74,7 @@ export function Board(props: Props) {
   const pct = Math.min(100, (total / chart.goal) * 100)
   const next = [25, 50, 75, 100].find((m) => total < (chart.goal * m) / 100)
   const remaining = squares.filter((s) => !s.scratched_at).length
-  const maxAmount = chart.step * chart.square_count
+  const maxAmount = squares.reduce((m, s) => Math.max(m, s.amount), 1)
   const matches = matcher(filter, maxAmount)
 
   const showToast = useCallback((t: Toast, ms = 5000) => {
@@ -222,7 +223,12 @@ export function Board(props: Props) {
             <span className="tally-total">{money(total)}</span>
             <span className="tally-of">of {money(chart.goal)}</span>
           </div>
-          <span className="tally-pct">{Math.floor(pct)}%</span>
+          <div className="tally-right">
+            <span className="tally-pct">{Math.floor(pct)}%</span>
+            <button type="button" className="tally-edit" onClick={props.onEditGoal}>
+              Edit goal
+            </button>
+          </div>
         </div>
         <div className="bar" role="progressbar" aria-label="Saved toward goal" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.floor(pct)}>
           <div className="bar-fill" style={{ width: `${pct}%` }} />

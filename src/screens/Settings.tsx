@@ -5,7 +5,8 @@ import { isInstalled, isIOS, pushIsOn, sendTestPush, turnOffPush, turnOnPush, ty
 import { setSoundOn, soundOn } from '../lib/feedback'
 import { api, errorText } from '../lib/api'
 import { track } from '../lib/track'
-import type { Member, PayKind, PaySchedule } from '../lib/types'
+import type { AppState, Chart, Member, PayKind, PaySchedule, Square } from '../lib/types'
+import { GoalEditor } from '../components/GoalEditor'
 import { BackIcon } from '../components/Icons'
 
 const KINDS: [PayKind, string][] = [
@@ -37,9 +38,13 @@ type Props = {
   onRenamed: () => void
   /** Shown only to admins. */
   onAdmin?: () => void
+  chart?: Chart | null
+  squares?: Square[]
+  focusGoal?: boolean
+  onChartUpdated?: (state: AppState) => void
 }
 
-export function Settings({ me, schedule, defaultKind, onboarding, onSaved, onBack, onInvite, onNewChart, onRenamed, onAdmin }: Props) {
+export function Settings({ me, schedule, defaultKind, onboarding, onSaved, onBack, onInvite, onNewChart, onRenamed, onAdmin, chart, squares, focusGoal, onChartUpdated }: Props) {
   const tz = schedule?.timezone || localTimeZone()
   const today = todayIn(tz)
   const [kind, setKind] = useState<PayKind>(schedule?.kind ?? defaultKind ?? 'biweekly')
@@ -125,6 +130,10 @@ export function Settings({ me, schedule, defaultKind, onboarding, onSaved, onBac
         <h1 className="title">{onboarding ? 'When do you get paid?' : 'Settings'}</h1>
         <p className="lede">We&rsquo;ll nudge you on payday. You and your partner each set your own schedule.</p>
       </div>
+
+      {!onboarding && chart && onChartUpdated && (
+        <GoalEditor key={chart.id} chart={chart} squares={squares ?? []} focus={focusGoal} onUpdated={onChartUpdated} />
+      )}
 
       <div className="stack-8">
         <span className="label" id="kind">
