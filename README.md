@@ -83,6 +83,16 @@ Usage is recorded on your own Netlify account, alongside the charts. Let your te
 
 ---
 
+### 8. Face ID sign-in
+
+Nothing to set up. After anyone logs in with their email and password, Stax asks if they want to turn on Face ID. People who were already signed in are asked once.
+
+- **With Face ID on,** Stax keeps them signed in on that phone for 30 days at a time. If they're ever logged out, **Sign in with Face ID** on the log-in screen gets them straight back in.
+- **"Not now"** stops the question until their next password log-in.
+- **Settings → Sign in with Face ID** turns it on or off for that phone. Turning it off ends the Face ID sign-in right away.
+- Face ID only works on the address it was set up on. If you later move Stax to a custom domain, everyone sets it up again once.
+- The key that signs Face ID sessions is created automatically. To use your own, add a `SESSION_SECRET` environment variable in Netlify (any random text, 32+ characters). Changing it signs out everyone who used Face ID.
+
 ## Good to know
 
 - **iPhone notifications** only work after adding Stax to the Home Screen (iOS 16.4 or newer).

@@ -32,6 +32,10 @@ export const EVENT_LABELS: Record<string, string> = {
   sound_toggle: 'Switched sounds',
   reminder_sent: 'Was sent a payday reminder',
   reminder_converted: 'Scratched within 24h of a reminder',
+  passkey_on: 'Turned on Face ID sign-in',
+  passkey_off: 'Turned off Face ID sign-in',
+  passkey_login: 'Signed in with Face ID',
+  passkey_declined: 'Said “Not now” to Face ID',
 }
 
 /** Events the app itself may report (everything else is recorded by the server). */
@@ -47,6 +51,7 @@ export const CLIENT_EVENTS = new Set([
   'settings_open',
   'grid_toggle',
   'sound_toggle',
+  'passkey_declined',
 ])
 
 type Detail = Record<string, string | number | boolean>

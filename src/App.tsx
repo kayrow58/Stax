@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { getUser, handleAuthCallback, logout, onAuthChange, type User } from '@netlify/identity'
+import { getUser, handleAuthCallback, onAuthChange, type User } from '@netlify/identity'
 import { api, errorText } from './lib/api'
 import { useCouple } from './lib/useCouple'
 import { watchVisits } from './lib/track'
+import { faceIdName, faceIdSession, faceIdSupported, onFaceIdChange, shouldOfferFaceId, signOut } from './lib/faceid'
 import type { AppState, PayKind } from './lib/types'
 import { NewPassword, SignIn } from './screens/SignIn'
 import { Welcome } from './screens/Welcome'
@@ -11,6 +12,7 @@ import { Invite } from './screens/Invite'
 import { Settings } from './screens/Settings'
 import { Board } from './screens/Board'
 import { Admin } from './screens/Admin'
+import { FaceIdOffer } from './screens/FaceIdOffer'
 
 const INVITE_KEY = 'ss.invite'
 
@@ -28,8 +30,16 @@ const hasSession = () => /(?:^|;\s*)nf_jwt=/.test(document.cookie)
 const pendingInvite = () => localStorage.getItem(INVITE_KEY)
 const clearInvite = () => localStorage.removeItem(INVITE_KEY)
 
+type Me = { id: string; email: string }
+/** Who's signed in: a Face ID session on this phone, or a Netlify Identity login. */
+function whoIsSignedIn(u: User | null): Me | null {
+  const face = faceIdSession()
+  if (face) return face.user
+  return u && hasSession() ? { id: u.id, email: u.email ?? '' } : null
+}
+
 export default function App() {
-  const [user, setUser] = useState<User | null | undefined>(undefined)
+  const [user, setUser] = useState<Me | null | undefined>(undefined)
   const [recovering, setRecovering] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
 
@@ -45,29 +55,42 @@ export default function App() {
         setNotice(`That link didn’t work (${errorText(e)}). It may have expired; try again.`)
       }
       const u = await getUser()
-      if (alive) setUser(u && hasSession() ? u : null)
+      if (alive) setUser(whoIsSignedIn(u))
     })()
     const off = onAuthChange((event, u) => {
       if (event === 'recovery') setRecovering(true)
-      setUser(u && hasSession() ? u : null)
+      setUser(whoIsSignedIn(u))
+    })
+    const offFace = onFaceIdChange(() => {
+      void getUser().then((u) => alive && setUser(whoIsSignedIn(u)))
     })
     return () => {
       alive = false
       off()
+      offFace()
     }
   }, [])
 
   if (user === undefined) return <Loading />
   if (recovering && user) return <NewPassword onDone={() => setRecovering(false)} />
   if (!user) return <SignIn joining={Boolean(pendingInvite())} notice={notice} />
-  return <Home key={user.id} />
+  return <Home key={user.id} userId={user.id} />
 }
 
 type View = 'board' | 'invite' | 'settings' | 'newchart' | 'admin'
 type Onboarding = null | 'invite' | 'reminders'
 
-function Home() {
+function Home({ userId }: { userId: string }) {
   const c = useCouple()
+  const [offerFaceId, setOfferFaceId] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    void faceIdSupported().then((ok) => alive && setOfferFaceId(ok && shouldOfferFaceId(userId)))
+    return () => {
+      alive = false
+    }
+  }, [userId])
   const [view, setView] = useState<View>('board')
   const [onboarding, setOnboarding] = useState<Onboarding>(null)
   const [chosenFreq, setChosenFreq] = useState<PayKind | null>(null)
@@ -99,14 +122,24 @@ function Home() {
   }, [c.member?.user_id, c.couple?.id])
 
   if (c.signedOut) {
-    void logout().catch(() => undefined)
+    void signOut()
     return <Loading />
   }
   if (c.loading) return <Loading />
   if (c.error && !c.member) return <ErrorScreen message={c.error} onRetry={() => void c.reload()} />
 
   let screen: React.ReactNode
-  if (view === 'admin' && c.isAdmin) {
+  if (offerFaceId) {
+    screen = (
+      <FaceIdOffer
+        userId={userId}
+        onDone={(on) => {
+          setOfferFaceId(false)
+          if (on) setNotice(`${faceIdName()} is on. Next time, you’re in with just a glance.`)
+        }}
+      />
+    )
+  } else if (view === 'admin' && c.isAdmin) {
     screen = <Admin onBack={() => setView('settings')} />
   } else if (!c.member || !c.couple) {
     screen = (
@@ -233,7 +266,7 @@ function ErrorScreen({ message, onRetry }: { message: string; onRetry: () => voi
         <button type="button" className="btn" onClick={onRetry}>
           Try again
         </button>
-        <button type="button" className="link-btn" onClick={() => void logout()}>
+        <button type="button" className="link-btn" onClick={() => void signOut()}>
           Log out
         </button>
       </div>

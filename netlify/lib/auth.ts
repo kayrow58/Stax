@@ -1,3 +1,6 @@
+import type { KV } from './kv'
+import { sessionUser } from './passkeys'
+
 export type AuthUser = { id: string; email: string }
 
 // Verified tokens, so polling doesn't re-check with Identity every few seconds.
@@ -23,9 +26,11 @@ function expiry(token: string): number {
  * Who is making this request, checked against Netlify Identity.
  * The browser library keeps the signed-in user's token in the `nf_jwt` cookie.
  */
-export async function authUser(req: Request): Promise<AuthUser | null> {
+export async function authUser(req: Request, kv: KV): Promise<AuthUser | null> {
   const token = tokenFrom(req)
   if (!token) return null
+  // Signed in with Face ID: our own session token, checked here instead of with Identity.
+  if (token.startsWith('stx.')) return sessionUser(kv, token)
   const now = Date.now()
   const hit = cache.get(token)
   if (hit && hit.until > now) return hit.user

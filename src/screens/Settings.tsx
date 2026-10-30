@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { logout } from '@netlify/identity'
 import { hourLabel, localTimeZone, nextPayday, prettyDate, todayIn } from '../lib/payday'
 import { isInstalled, isIOS, pushIsOn, sendTestPush, turnOffPush, turnOnPush, type PushResult } from '../lib/push'
 import { setSoundOn, soundOn } from '../lib/feedback'
 import { api, errorText } from '../lib/api'
 import { track } from '../lib/track'
+import { faceIdName, faceIdSession, faceIdSupported, hasFaceIdHere, signOut, turnOffFaceId, turnOnFaceId } from '../lib/faceid'
 import type { AppState, Chart, Member, PayKind, PaySchedule, Square } from '../lib/types'
 import { GoalEditor } from '../components/GoalEditor'
 import { BackIcon } from '../components/Icons'
@@ -58,8 +58,13 @@ export function Settings({ me, schedule, defaultKind, onboarding, onSaved, onBac
   const [busy, setBusy] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [canFaceId, setCanFaceId] = useState(false)
+  const [faceId, setFaceId] = useState(hasFaceIdHere(me.user_id))
+  const [faceBusy, setFaceBusy] = useState(false)
+  const [faceMsg, setFaceMsg] = useState<string | null>(null)
 
   useEffect(() => {
+    void faceIdSupported().then(setCanFaceId)
     void pushIsOn().then(setPush)
     if (!onboarding) track('settings_open')
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -67,6 +72,33 @@ export function Settings({ me, schedule, defaultKind, onboarding, onSaved, onBac
 
   const needsAnchor = kind !== 'semimonthly'
   const next = nextPayday(kind, needsAnchor ? anchor : null, today)
+
+  async function toggleFaceId() {
+    const name = faceIdName()
+    setFaceMsg(null)
+    if (faceId) {
+      // Without a password session too, removing Face ID ends this sign-in.
+      const signsOut = Boolean(faceIdSession()) && !/(?:^|;\s*)nf_jwt=/.test(document.cookie)
+      if (signsOut && !window.confirm(`Turn off ${name}? You’ll be logged out and need your email and password to sign back in.`)) return
+      setFaceBusy(true)
+      try {
+        await turnOffFaceId()
+        setFaceId(false)
+      } catch (e) {
+        setFaceMsg(errorText(e))
+      } finally {
+        setFaceBusy(false)
+      }
+      return
+    }
+    setFaceBusy(true)
+    const r = await turnOnFaceId(me.user_id)
+    setFaceBusy(false)
+    if (r.ok) {
+      setFaceId(true)
+      setFaceMsg(`${name} is on for this phone.`)
+    } else if (!r.cancelled) setFaceMsg(r.message)
+  }
 
   async function togglePush() {
     setPushMsg(null)
@@ -198,6 +230,19 @@ export function Settings({ me, schedule, defaultKind, onboarding, onSaved, onBac
             <input id="myname" className="input" maxLength={40} value={name} onChange={(e) => setName(e.target.value)} />
           </div>
 
+          {canFaceId && (
+            <>
+              <button type="button" role="switch" aria-checked={faceId} className="switch-row" disabled={faceBusy} onClick={() => void toggleFaceId()}>
+                <span className="grow">
+                  <strong>Sign in with {faceIdName()}</strong>
+                  <span className="small">{faceId ? 'On for this phone. No password needed.' : 'Skip typing your password on this phone'}</span>
+                </span>
+                <span className="track" aria-hidden="true" />
+              </button>
+              {faceMsg && <div className="notice" role="status">{faceMsg}</div>}
+            </>
+          )}
+
           <button
             type="button"
             role="switch"
@@ -263,7 +308,7 @@ export function Settings({ me, schedule, defaultKind, onboarding, onSaved, onBac
               type="button"
               className="link-btn danger"
               onClick={() => {
-                void turnOffPush().finally(() => void logout())
+                void turnOffPush().finally(() => void signOut())
               }}
             >
               Log out

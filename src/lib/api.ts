@@ -1,4 +1,5 @@
 import { refreshSession } from '@netlify/identity'
+import { faceIdSession } from './faceid'
 
 export class ApiError extends Error {
   status: number
@@ -14,6 +15,9 @@ export function errorText(e: unknown): string {
 }
 
 function token(): string | null {
+  // Signed in with Face ID: that session lasts weeks, so it wins over the short-lived Identity cookie.
+  const face = faceIdSession()
+  if (face) return face.token
   const m = document.cookie.match(/(?:^|;\s*)nf_jwt=([^;]+)/)
   return m ? decodeURIComponent(m[1]) : null
 }

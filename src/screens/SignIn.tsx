@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { login, MissingIdentityError, requestPasswordRecovery, signup, updateUser } from '@netlify/identity'
-import { Logo } from '../components/Icons'
+import { FaceIdIcon, Logo } from '../components/Icons'
+import { deviceFaceId, faceIdName, faceIdSupported, markPasswordLogin, signInWithFaceId } from '../lib/faceid'
 
 type Mode = 'signup' | 'login' | 'forgot'
 
@@ -34,12 +35,32 @@ async function authMessage(e: unknown, mode: Mode): Promise<string> {
 }
 
 export function SignIn({ joining, notice }: { joining: boolean; notice?: string | null }) {
-  const [mode, setMode] = useState<Mode>('signup')
+  // Someone who set up Face ID on this phone is a returning user: start on log in.
+  const faceIdHere = Boolean(deviceFaceId())
+  const [mode, setMode] = useState<Mode>(faceIdHere && !joining ? 'login' : 'signup')
+  const [canFaceId, setCanFaceId] = useState(false)
+  const [faceBusy, setFaceBusy] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(notice ?? null)
+
+  useEffect(() => {
+    void faceIdSupported().then(setCanFaceId)
+  }, [])
+
+  async function faceIdSignIn() {
+    setFaceBusy(true)
+    setError(null)
+    setInfo(null)
+    const r = await signInWithFaceId()
+    // On success the app switches screens by itself.
+    if (!r.ok) {
+      setFaceBusy(false)
+      setError(r.message)
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -51,12 +72,14 @@ export function SignIn({ joining, notice }: { joining: boolean; notice?: string 
         const u = await signup(email.trim(), password)
         if (u.confirmedAt) {
           // Auto-confirmed: log straight in so the session cookie is set.
+          markPasswordLogin()
           await login(email.trim(), password)
         } else {
           setInfo(`Almost done! We sent a confirmation link to ${email.trim()}. Tap it, then come back and log in.`)
           setMode('login')
         }
       } else if (mode === 'login') {
+        markPasswordLogin()
         await login(email.trim(), password)
       } else {
         await requestPasswordRecovery(email.trim())
@@ -95,7 +118,17 @@ export function SignIn({ joining, notice }: { joining: boolean; notice?: string 
 
       {info && <div className="notice" role="status">{info}</div>}
 
+
       <form className="stack-12 push-down" onSubmit={submit}>
+        {canFaceId && mode === 'login' && (
+          <>
+            <button type="button" className={'btn' + (faceIdHere ? '' : ' outline')} disabled={faceBusy || busy} onClick={() => void faceIdSignIn()}>
+              <FaceIdIcon size={24} />
+              {faceBusy ? 'One moment…' : `Sign in with ${faceIdName()}`}
+            </button>
+            <div className="divider" style={{ margin: '8px 0' }}>or use your email</div>
+          </>
+        )}
         <div className="stack-8">
           <label className="label" htmlFor="email">
             Email
@@ -121,7 +154,7 @@ export function SignIn({ joining, notice }: { joining: boolean; notice?: string 
           </div>
         )}
         {error && <p className="error" role="alert">{error}</p>}
-        <button className="btn" disabled={busy}>
+        <button className={'btn' + (canFaceId && faceIdHere && mode === 'login' ? ' outline' : '')} disabled={busy || faceBusy}>
           {busy ? 'One moment…' : mode === 'signup' ? 'Create account' : mode === 'login' ? 'Log in' : 'Send reset link'}
         </button>
         <div className="stack">

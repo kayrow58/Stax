@@ -288,3 +288,8 @@ input[type='date'].input::-webkit-calendar-picker-indicator { opacity: 0.6; }
 .activity li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line-soft); font-size: 14px; }
 .activity li:last-child { border-bottom: 0; }
 .activity .small { white-space: nowrap; }
+
+/* Face ID sign-in */
+.faceid-badge { width: 76px; height: 76px; display: grid; place-items: center; border-radius: 22px; background: var(--green-tint); color: var(--green-dark); }
+.divider { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; }
+.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--line); }

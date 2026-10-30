@@ -2,6 +2,7 @@ import webpush from 'web-push'
 import type { KV } from './kv'
 import type { AuthUser } from './auth'
 import { CLIENT_EVENTS, cleanDetail, isAdmin, overview, track } from './analytics'
+import { PasskeyError, listPasskeys, loginOptions, loginVerify, registerOptions, registerVerify, removePasskey } from './passkeys'
 import { MAX_GOAL, MIN_GOAL, SQUARES, balancedOrder, money, priceSquares } from '../../src/lib/chart'
 import { isPayday, localDateHour } from '../../src/lib/payday'
 import type { AppState, Chart, Couple, Member, PayKind, PaySchedule, Square } from '../../src/lib/types'
@@ -436,14 +437,36 @@ export async function handle(req: Request, user: AuthUser | null, kv: KV): Promi
   const url = new URL(req.url)
   const route = `${req.method} ${url.pathname.replace(/^\/api/, '').replace(/\/$/, '')}`
   try {
-    if (!user) return json({ error: 'Please sign in again.' }, 401)
     let body: Record<string, unknown> = {}
     if (req.method !== 'GET') {
       // JSON-only requests can't be forged by other websites' plain forms.
       if (!(req.headers.get('content-type') ?? '').includes('application/json')) return json({ error: 'Bad request.' }, 415)
       body = ((await req.json().catch(() => ({}))) ?? {}) as Record<string, unknown>
     }
+    // Face ID sign-in happens before anyone is signed in.
+    if (route === 'POST /passkey/login/options') return json(await loginOptions(kv, req))
+    if (route === 'POST /passkey/login/verify') {
+      const result = await loginVerify(kv, req, body)
+      await track(kv, result.user, 'passkey_login')
+      return json(result)
+    }
+    if (!user) return json({ error: 'Please sign in again.' }, 401)
     switch (route) {
+      case 'GET /passkeys':
+        return json(
+          (await listPasskeys(kv, user.id)).map((p) => ({ id: p.id, device: p.device, created_at: p.created_at, last_used_at: p.last_used_at })),
+        )
+      case 'POST /passkey/register/options':
+        return json(await registerOptions(kv, user, req))
+      case 'POST /passkey/register/verify': {
+        const result = await registerVerify(kv, user, req, body)
+        await track(kv, user, 'passkey_on', { device: String(body.device ?? '') })
+        return json(result)
+      }
+      case 'DELETE /passkey':
+        await removePasskey(kv, user, body.id)
+        await track(kv, user, 'passkey_off')
+        return json({ ok: true })
       case 'GET /state':
         return json(await getState(kv, user))
       case 'POST /couple/create':
@@ -517,7 +540,7 @@ export async function handle(req: Request, user: AuthUser | null, kv: KV): Promi
         return json({ error: 'Not found.' }, 404)
     }
   } catch (e) {
-    if (e instanceof HttpError) return json({ error: e.message }, e.status)
+    if (e instanceof HttpError || e instanceof PasskeyError) return json({ error: e.message }, e.status)
     console.error(e)
     return json({ error: 'Something went wrong. Please try again.' }, 500)
   }
